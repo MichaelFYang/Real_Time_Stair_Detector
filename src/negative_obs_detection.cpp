@@ -114,10 +114,32 @@ void NegObsDetect::GroundSegmentation() {
         std::cout<<"The Point Cloud is Empty now!"
         return;
     }
+    std::size_t id_cur, id_check;
+    float diff_x, diff_y, diff_z;
+    double angle;
     std::size_t laser_cloud_size = laser_cloud_image_->points.size();
-    for (std::size_t i=0; i<laser_cloud_size; i++) {
-        // TODO!
-    }
+    std::unordered_set<std::size_t> visited_set;
+    std::queue<std::size_t> ground_queue;
+    int cur_row, cur_col, check_row, check_col;
+    int dx[8] = {-1,-1,-1,0,0,1,1,1};
+    int dy[8] = {-1,0,1,-1,1,-1,0,1};
+    cur_row = int(N_SCAN/4);
+    cur_col = int(HORIZON_SCAN/2);
+
+    id_cur = center_col + center_row * HORIZON_SCAN;
+    ground_queue.push(id_cur);
+    while (!ground_queue.empty())
+        id_cur = ground_queue.back();
+        ground_queue.pop();
+        cur_col = id_cur % HORIZON_SCAN;
+        cur_row = (int)(id_cur/HORIZON_SCAN);
+        for (int i=0; i<8; i++) {
+            check_row = cur_row + dx[i];
+            check_col = cur_col + dy[i];
+            id_check = check_col + check_row * HORIZON_SCAN;
+
+        }
+    
 }
 
 
