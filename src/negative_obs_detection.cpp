@@ -4,30 +4,45 @@
 
 NegObsDetect::NegObsDetect() {
 /* TODO! */
-}
-
-void NegObsDetect::Initialization() {
-/* TODO!*/ 
-    // Initai ROS params
+     // Initai ROS params
     if (!nh_.getParam("vb_goal_topic",goal_topic_)) {
         goal_topic_ = "/way_point";
     } 
     if (!nh_.getParam("laserVoxelSize", laserVoxelSize_))
         laserVoxelSize_ = 0.05;
+    this->Initialization();
+}
+
+void NegObsDetect::Initialization() {
+/* TODO!*/ 
     // Allocate Memory for PointClouds
-    laser_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
-    ground_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
-    neg_obs_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
-    neg_obs_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
-    laserDwzFilter_.setLeafSize(laserVoxelSize,laserVoxelSize,laserVoxelSize);
+    laser_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    ground_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    neg_obs_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    neg_obs_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
+
+    nanPoint_.x = std::numeric_limits<float>::quiet_NaN();
+    nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
+    nanPoint_.z = std::numeric_limits<float>::quiet_NaN();
+    nanPoint.intensity = -1;
 
 }
 
 void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg) {
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
+    laser_cloud_image->clear();
     pcl::fromROSMsg(*laser_msg, *laser_cloud_);
     this->TransCloudFrame();
+    laser_cloud_imgae.resize();
+}
+
+void VB_Planner::OdomHandler(const nav_msgs::Odometry odom_msg) {
+/* Odom Callback function */
+    odom_ = odom_msg;
+    robot_pos_.x = odom_.pose.pose.position.x;
+    robot_pos_.y = odom_.pose.pose.position.y;
+    robot_pos_.z = odom_.pose.pose.position.z;
 }
 
 void NegObsDetect::TransCloudFrame() {
@@ -42,10 +57,7 @@ void NegObsDetect::TransCloudFrame() {
         this->LeftRotatePoint(point);
         laser_cloud_temp->points.push_back(point);
     }
-    laserDwzFilter_->clear();
-    laserDwzFilter.setInputCloud(laser_cloud_temp);
-    laserDwzFilter.filter(*laser_cloud_);
-
+    laser_cloud_ = laser_cloud_temp;
 }
 
 void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
@@ -58,6 +70,42 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
 
 void NegObsDetect::CloudImageProjection() {
 /* TODO -> Make a Project PointCloud into a image [row, col] for BSF search*/
+    std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint);
+    float verticalAngle, horizonAngle, range;
+    std::size_t rowIdn, columnIdn, index, cloudSize; 
+    PointType thisPoint;
+
+    cloudSize = laser_cloud_->points.size();
+
+    for (size_t i = 0; i < cloudSize; ++i){
+
+        thisPoint.x = laser_cloud_->points[i].x - robot_pos_.x;
+        thisPoint.y = laser_cloud_->points[i].y - robot_pos_.y;
+        thisPoint.z = laser_cloud_->points[i].z - robot_pos_.z;
+
+        if (thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y + thisPoint.z * thisPoint.z < 4) {
+            continue;
+        }
+
+        verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
+        rowIdn = (verticalAngle + ang_bottom) / ANG_RES_Y;
+        if (rowIdn < 0 || rowIdn >= N_SCAN)
+            continue;
+
+        horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
+
+        columnIdn = -round((horizonAngle-90.0)/ANG_RES_X) + HORIZON_SCAN/2;
+        if (columnIdn >= HORIZON_SCAN)
+            columnIdn -= HORIZON_SCAN;
+
+        if (columnIdn < 0 || columnIdn >= HORIZON_SCAN)
+            continue;
+
+        // thisPoint.intensity = (float)rowIdn + (float)columnIdn / 10000.0;
+        thisPoint.intensity = (float)rowIdn;
+        index = columnIdn  + rowIdn * HORIZON_SCAN;
+        laser_cloud_image_->points[index] = thisPoint;
+    }
 }
 
 void NegObsDetect::GroundSegmentation() {
