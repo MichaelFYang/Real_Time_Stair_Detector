@@ -5,11 +5,22 @@
 NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
-    if (!nh_.getParam("vb_goal_topic",goal_topic_)) {
-        goal_topic_ = "/way_point";
+    if (!nh_.getParam("neg_obs/laser_topic_sub",laser_topic_sub_)) {
+        laser_topic_sub_ = "/way_point";
+    }
+    if (!nh_.getParam("neg_obs/odom_topic_sub",odom_topic_sub_)) {
+        odom_topic_sub_ = "/odom";
+    }
+    if (!nh_.getParam("ground_topic_pub",ground_topic_pub_)) {
+        ground_topic_pub_ = "/way_point";
     } 
-    if (!nh_.getParam("laserVoxelSize", laserVoxelSize_))
-        laserVoxelSize_ = 0.05;
+    if (!nh_.getParam("neg_obs_topic_pub", neg_obs_topic_pub_)) {
+        neg_obs_topic_pub_ = "/way_point";
+    }
+     if (!nh_.getParam("slope_thresh", slope_thresh_)) {
+        slope_thresh_ = 5.0;
+     }
+    
     this->Initialization();
 }
 
@@ -24,20 +35,20 @@ void NegObsDetect::Initialization() {
     nanPoint_.x = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.z = std::numeric_limits<float>::quiet_NaN();
-    nanPoint.intensity = -1;
+    nanPoint_.intensity = -1;
 
 }
 
 void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg) {
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
-    laser_cloud_image->clear();
-    pcl::fromROSMsg(*laser_msg, *laser_cloud_);
+    laser_cloud_image_->clear();
+    pcl::fromROSMsg(*cloud_msg, *laser_cloud_);
     this->TransCloudFrame();
-    laser_cloud_imgae.resize();
+    laser_cloud_image_->points.resize(N_SCAN*HORIZON_SCAN);
 }
 
-void VB_Planner::OdomHandler(const nav_msgs::Odometry odom_msg) {
+void NegObsDetect::OdomHandler(const nav_msgs::Odometry odom_msg) {
 /* Odom Callback function */
     odom_ = odom_msg;
     robot_pos_.x = odom_.pose.pose.position.x;
@@ -70,7 +81,7 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
 
 void NegObsDetect::CloudImageProjection() {
 /* TODO -> Make a Project PointCloud into a image [row, col] for BSF search*/
-    std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint);
+    std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint_);
     float verticalAngle, horizonAngle, range;
     std::size_t rowIdn, columnIdn, index, cloudSize; 
     PointType thisPoint;
@@ -88,7 +99,7 @@ void NegObsDetect::CloudImageProjection() {
         }
 
         verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
-        rowIdn = (verticalAngle + ang_bottom) / ANG_RES_Y;
+        rowIdn = (verticalAngle +ANG_BOTTOM) / ANG_RES_Y;
         if (rowIdn < 0 || rowIdn >= N_SCAN)
             continue;
 
@@ -109,37 +120,62 @@ void NegObsDetect::CloudImageProjection() {
 }
 
 void NegObsDetect::GroundSegmentation() {
-/* TODO! Segment Ground PointCloud -> Operation on laser_cloud_image */
+/* Segment Ground PointCloud -> Operation on laser_cloud_image */
     if (laser_cloud_image_->empty()) {
-        std::cout<<"The Point Cloud is Empty now!"
+        std::cout<<"The Point Cloud is Empty now!";
         return;
     }
+    ground_cloud_->clear();
+    neg_obs_cloud_->clear();
     std::size_t id_cur, id_check;
     float diff_x, diff_y, diff_z;
     double angle;
     std::size_t laser_cloud_size = laser_cloud_image_->points.size();
     std::unordered_set<std::size_t> visited_set;
     std::queue<std::size_t> ground_queue;
+
     int cur_row, cur_col, check_row, check_col;
     int dx[8] = {-1,-1,-1,0,0,1,1,1};
     int dy[8] = {-1,0,1,-1,1,-1,0,1};
+    /* Start Point*/
     cur_row = int(N_SCAN/4);
     cur_col = int(HORIZON_SCAN/2);
-
-    id_cur = center_col + center_row * HORIZON_SCAN;
+    /* Start Point*/
+    visited_set.clear();
+    id_cur = cur_col + cur_row * HORIZON_SCAN;
     ground_queue.push(id_cur);
+    if (laser_cloud_image_->points[id_cur].x == std::numeric_limits<float>::quiet_NaN()) return;
+    ground_cloud_->points.push_back(laser_cloud_image_->points[id_cur]);
     while (!ground_queue.empty())
         id_cur = ground_queue.back();
+        visited_set.insert(id_cur);
         ground_queue.pop();
         cur_col = id_cur % HORIZON_SCAN;
         cur_row = (int)(id_cur/HORIZON_SCAN);
         for (int i=0; i<8; i++) {
+            // calculate check id, check row id , check col id;
             check_row = cur_row + dx[i];
             check_col = cur_col + dy[i];
+            if (check_row < 1 || check_row >= int(N_SCAN/2)) continue;
+            if (check_col < 0) check_col = HORIZON_SCAN - 1;
+            if (check_col >= HORIZON_SCAN) check_col = 0;
             id_check = check_col + check_row * HORIZON_SCAN;
+            // Terrain Angle Calculation 
+            if (visited_set.count(id_check)) continue;
+            visited_set.insert(id_check);
+            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
+            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
+            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
+            angle = atan2(diff_z, sqrt(diff_x*diff_x + diff_y*diff_y) ) * 180 / M_PI;
+            if (abs(angle) <= slope_thresh_) {
+                ground_cloud_->points.push_back(laser_cloud_image_->points[id_check]);
+                ground_queue.push(id_check);
+                if (angle < 0) { // negative obstacle
+                    neg_obs_cloud_->points.push_back(laser_cloud_image_->points[id_check]);
+                }
+            }
 
         }
-    
 }
 
 
