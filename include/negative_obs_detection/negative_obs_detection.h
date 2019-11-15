@@ -80,9 +80,12 @@ private:
     PointCloudPtr ground_cloud_;
     PointCloudPtr neg_obs_cloud_;
 
+    sensor_msgs::PointCloud2 ground_ros_cloud_;
+    sensor_msgs::PointCloud2 neg_obs_ros_cloud_; 
 
     // Operation Functions
     void Initialization();
+    void TopicHandle();
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
     void TransCloudFrame();

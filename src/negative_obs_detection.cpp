@@ -24,6 +24,33 @@ NegObsDetect::NegObsDetect() {
     this->Initialization();
 }
 
+void NegObsDetect::Loop() {
+/* TODO! */
+    point_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(ground_topic_pub_,1);
+    negative_object_border_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(neg_obs_topic_pub_,1);
+    point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
+    odom_sub_ = nh_.subscribe(odom_topic_sub_,1,&NegObsDetect::OdomHandler,this);
+
+    ros::Rate rate(1);
+    while(ros::ok())
+    {
+        ros::spinOnce(); // process all callback function
+        //process
+        this->CloudImageProjection();
+        this->GroundSegmentation();
+        this->TopicHandle();
+        rate.sleep();
+    }
+}
+
+void NegObsDetect::TopicHandle() {
+/* cloud type transpose and msg publish*/
+    pcl::toROSMsg(*ground_cloud_, ground_ros_cloud_);
+    pcl::toROSMsg(*neg_obs_cloud_, neg_obs_ros_cloud_);
+    point_cloud_pub_.publish(ground_ros_cloud_);
+    negative_object_border_pub_.publish(neg_obs_cloud_);
+}
+
 void NegObsDetect::Initialization() {
 /* TODO!*/ 
     // Allocate Memory for PointClouds
@@ -43,6 +70,8 @@ void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
     laser_cloud_image_->clear();
+    ground_ros_cloud_.header = cloud_msg->header;
+    neg_obs_ros_cloud_. header = cloud_msg->header;
     pcl::fromROSMsg(*cloud_msg, *laser_cloud_);
     this->TransCloudFrame();
     laser_cloud_image_->points.resize(N_SCAN*HORIZON_SCAN);
@@ -81,6 +110,10 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
 
 void NegObsDetect::CloudImageProjection() {
 /* TODO -> Make a Project PointCloud into a image [row, col] for BSF search*/
+    if (laser_cloud_->empty()) {
+        std::cout<<"The Point Cloud is Empty now!";
+        return;
+    }
     std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint_);
     float verticalAngle, horizonAngle, range;
     std::size_t rowIdn, columnIdn, index, cloudSize; 
@@ -121,10 +154,6 @@ void NegObsDetect::CloudImageProjection() {
 
 void NegObsDetect::GroundSegmentation() {
 /* Segment Ground PointCloud -> Operation on laser_cloud_image */
-    if (laser_cloud_image_->empty()) {
-        std::cout<<"The Point Cloud is Empty now!";
-        return;
-    }
     ground_cloud_->clear();
     neg_obs_cloud_->clear();
     std::size_t id_cur, id_check;
@@ -138,7 +167,7 @@ void NegObsDetect::GroundSegmentation() {
     int dx[8] = {-1,-1,-1,0,0,1,1,1};
     int dy[8] = {-1,0,1,-1,1,-1,0,1};
     /* Start Point*/
-    cur_row = int(N_SCAN/4);
+    cur_row = 0;
     cur_col = int(HORIZON_SCAN/2);
     /* Start Point*/
     visited_set.clear();
