@@ -79,7 +79,7 @@ private:
     PointCloudPtr laser_cloud_image_;
     PointCloudPtr ground_cloud_;
     PointCloudPtr neg_obs_cloud_;
-
+    sensor_msgs::PointCloud2ConstPtr cloud_msg_;
     sensor_msgs::PointCloud2 ground_ros_cloud_;
     sensor_msgs::PointCloud2 neg_obs_ros_cloud_; 
 
@@ -93,6 +93,7 @@ private:
     void CloudImageProjection();
     // Tool Functions
     void LeftRotatePoint(pcl::PointXYZI &pnt);
+    void RightRotatePoint(pcl::PointXYZI &pnt);
     
 
 };

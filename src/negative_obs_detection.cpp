@@ -6,19 +6,19 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("neg_obs/laser_topic_sub",laser_topic_sub_)) {
-        laser_topic_sub_ = "/way_point";
+        laser_topic_sub_ = "/velodyne_cloud_registered";
     }
     if (!nh_.getParam("neg_obs/odom_topic_sub",odom_topic_sub_)) {
-        odom_topic_sub_ = "/odom";
+        odom_topic_sub_ = "/integrated_to_map";
     }
     if (!nh_.getParam("ground_topic_pub",ground_topic_pub_)) {
-        ground_topic_pub_ = "/way_point";
+        ground_topic_pub_ = "/neg_detect/ground_cloud";
     } 
     if (!nh_.getParam("neg_obs_topic_pub", neg_obs_topic_pub_)) {
-        neg_obs_topic_pub_ = "/way_point";
+        neg_obs_topic_pub_ = "/neg_detect/neg_obstacle";
     }
      if (!nh_.getParam("slope_thresh", slope_thresh_)) {
-        slope_thresh_ = 5.0;
+        slope_thresh_ = 3.0;
      }
     
     this->Initialization();
@@ -35,10 +35,14 @@ void NegObsDetect::Loop() {
     while(ros::ok())
     {
         ros::spinOnce(); // process all callback function
+        std::cout<<"Debug Here: 1"<<std::endl;
+        if (!laser_cloud_->empty()) {
         //process
-        this->CloudImageProjection();
-        this->GroundSegmentation();
-        this->TopicHandle();
+            this->CloudImageProjection();
+            this->GroundSegmentation();
+            std::cout<<"Debug Here: 3"<<std::endl;
+            this->TopicHandle();
+        }else std::cout<<"The Point Cloud is Empty now!"<<std::endl;
         rate.sleep();
     }
 }
@@ -47,22 +51,26 @@ void NegObsDetect::TopicHandle() {
 /* cloud type transpose and msg publish*/
     pcl::toROSMsg(*ground_cloud_, ground_ros_cloud_);
     pcl::toROSMsg(*neg_obs_cloud_, neg_obs_ros_cloud_);
+    std::cout<<"Frame Id: "<<cloud_msg_->header.frame_id<<std::endl;
+    ground_ros_cloud_.header = cloud_msg_->header;
+    neg_obs_ros_cloud_.header = cloud_msg_->header;
     point_cloud_pub_.publish(ground_ros_cloud_);
-    negative_object_border_pub_.publish(neg_obs_cloud_);
+    negative_object_border_pub_.publish(neg_obs_ros_cloud_);
 }
 
 void NegObsDetect::Initialization() {
 /* TODO!*/ 
     // Allocate Memory for PointClouds
-    laser_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-    ground_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-    neg_obs_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-    neg_obs_cloud_.reset(new pcl::PointCloud<pcl::PointXYZI>());
-
+    laser_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    laser_cloud_image_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    ground_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    neg_obs_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    
     nanPoint_.x = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.z = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.intensity = -1;
+    std::cout<<"Initialize Successful"<<std::endl;
 
 }
 
@@ -70,8 +78,8 @@ void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
     laser_cloud_image_->clear();
-    ground_ros_cloud_.header = cloud_msg->header;
-    neg_obs_ros_cloud_. header = cloud_msg->header;
+    std::cout<<"Debug Here: 2"<<std::endl;
+    cloud_msg_ = cloud_msg;
     pcl::fromROSMsg(*cloud_msg, *laser_cloud_);
     this->TransCloudFrame();
     laser_cloud_image_->points.resize(N_SCAN*HORIZON_SCAN);
@@ -108,12 +116,16 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
     pnt.x = tmp_z;
 }
 
+void NegObsDetect::RightRotatePoint(pcl::PointXYZI &pnt) {
+/* Credit:https://bitbucket.org/cmusubt/misc_utils/src/master/src/misc_utils.cpp */
+    float tmp_x = pnt.x;
+    pnt.x = pnt.y;
+    pnt.y = pnt.z;
+    pnt.z = tmp_x;
+}
+
 void NegObsDetect::CloudImageProjection() {
 /* TODO -> Make a Project PointCloud into a image [row, col] for BSF search*/
-    if (laser_cloud_->empty()) {
-        std::cout<<"The Point Cloud is Empty now!";
-        return;
-    }
     std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint_);
     float verticalAngle, horizonAngle, range;
     std::size_t rowIdn, columnIdn, index, cloudSize; 
@@ -173,10 +185,15 @@ void NegObsDetect::GroundSegmentation() {
     visited_set.clear();
     id_cur = cur_col + cur_row * HORIZON_SCAN;
     ground_queue.push(id_cur);
-    if (laser_cloud_image_->points[id_cur].x == std::numeric_limits<float>::quiet_NaN()) return;
+    if (laser_cloud_image_->points[id_cur].x == std::numeric_limits<float>::quiet_NaN()) {
+        std::cout<<"Initial groud point is invaild!"<<std::endl;
+        return;
+    }
     ground_cloud_->points.push_back(laser_cloud_image_->points[id_cur]);
-    while (!ground_queue.empty())
+    while (!ground_queue.empty()) {
+        std::cout<<"current id: "<<id_cur<<std::endl;
         id_cur = ground_queue.back();
+        std::cout<<"Size of ground_queue: "<<ground_queue.size()<<std::endl;
         visited_set.insert(id_cur);
         ground_queue.pop();
         cur_col = id_cur % HORIZON_SCAN;
@@ -196,15 +213,20 @@ void NegObsDetect::GroundSegmentation() {
             diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
             diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
             angle = atan2(diff_z, sqrt(diff_x*diff_x + diff_y*diff_y) ) * 180 / M_PI;
+            std::cout<<"Adjecent angle: "<<angle<<std::endl;
             if (abs(angle) <= slope_thresh_) {
-                ground_cloud_->points.push_back(laser_cloud_image_->points[id_check]);
+                PointType temp_point;
+                temp_point = laser_cloud_image_->points[id_check];
+                this->RightRotatePoint(temp_point);
+                ground_cloud_->points.push_back(temp_point);
                 ground_queue.push(id_check);
                 if (angle < 0) { // negative obstacle
-                    neg_obs_cloud_->points.push_back(laser_cloud_image_->points[id_check]);
+                    neg_obs_cloud_->points.push_back(temp_point);
                 }
             }
 
         }
+    }
 }
 
 
