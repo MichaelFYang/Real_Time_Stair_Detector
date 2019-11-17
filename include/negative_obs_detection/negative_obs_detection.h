@@ -13,6 +13,7 @@ Organization: CMU Sub-T Explorer Team
 #include <velodyne_pointcloud/point_types.h>
 #include <velodyne_pointcloud/rawdata.h>
 #include <unordered_set>
+#include <tf/transform_broadcaster.h>
 #include <queue> 
 #include <math.h>
 
@@ -67,20 +68,25 @@ private:
     ros::Subscriber odom_sub_;
     ros::Publisher point_cloud_pub_;
     ros::Publisher ground_cloud_pub_;
+    ros::Publisher cloud_image_pub_;
     ros::Publisher negative_object_border_pub_;
     // params
-    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_;
+    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_, cloud_image_topic_pub_;
+    std::string odom_frame_id_;
     double slope_thresh_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
+    // TF tree
     // Point Cloud Value
     PointCloudPtr laser_cloud_;
     PointCloudPtr laser_cloud_image_;
+    PointCloudPtr laser_cloud_image_world_;
     PointCloudPtr ground_cloud_;
     PointCloudPtr neg_obs_cloud_;
     sensor_msgs::PointCloud2ConstPtr cloud_msg_;
     sensor_msgs::PointCloud2 ground_ros_cloud_;
+    sensor_msgs::PointCloud2 cloud_image_ros_cloud_;
     sensor_msgs::PointCloud2 neg_obs_ros_cloud_; 
 
     // Operation Functions
@@ -93,7 +99,7 @@ private:
     void CloudImageProjection();
     // Tool Functions
     void LeftRotatePoint(pcl::PointXYZI &pnt);
-    void RightRotatePoint(pcl::PointXYZI &pnt);
+    void RightRotatePointToWorld(pcl::PointXYZI &pnt);
     
 
 };
