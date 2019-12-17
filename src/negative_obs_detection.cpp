@@ -29,7 +29,7 @@ NegObsDetect::NegObsDetect() {
 
 void NegObsDetect::Loop() {
 /* TODO! */
-    point_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(ground_topic_pub_,1);
+    ground_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(ground_topic_pub_,1);
     negative_object_border_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(neg_obs_topic_pub_,1);
     cloud_image_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(cloud_image_topic_pub_,1);
     point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
@@ -39,12 +39,12 @@ void NegObsDetect::Loop() {
     while(ros::ok())
     {
         ros::spinOnce(); // process all callback function
-        std::cout<<"Debug Here: 1"<<std::endl;
+        // std::cout<<"Debug Here: 1"<<std::endl;
         if (!laser_cloud_->empty()) {
         //process
             this->CloudImageProjection();
             this->GroundSegmentation();
-            std::cout<<"Debug Here: 3"<<std::endl;
+            // std::cout<<"Debug Here: 3"<<std::endl;
             this->TopicHandle();
         }else std::cout<<"The Point Cloud is Empty now!"<<std::endl;
         rate.sleep();
@@ -58,7 +58,7 @@ void NegObsDetect::TopicHandle() {
     // std::cout<<"Frame Id: "<<cloud_msg_->header.frame_id<<std::endl;
     ground_ros_cloud_.header = cloud_msg_->header;
     neg_obs_ros_cloud_.header = cloud_msg_->header;
-    point_cloud_pub_.publish(ground_ros_cloud_);
+    ground_cloud_pub_.publish(ground_ros_cloud_);
     negative_object_border_pub_.publish(neg_obs_ros_cloud_);
 }
 
@@ -83,6 +83,7 @@ void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
     laser_cloud_image_->clear();
+    laser_cloud_image_world_->clear();
     // std::cout<<"Debug Here: 2"<<std::endl;
     cloud_msg_ = cloud_msg;
     pcl::fromROSMsg(*cloud_msg, *laser_cloud_);
@@ -98,6 +99,12 @@ void NegObsDetect::OdomHandler(const nav_msgs::Odometry odom_msg) {
     robot_pos_.x = odom_.pose.pose.position.x;
     robot_pos_.y = odom_.pose.pose.position.y;
     robot_pos_.z = odom_.pose.pose.position.z;
+
+    double roll, pitch, yaw;
+    geometry_msgs::Quaternion geo_quat = odom_msg.pose.pose.orientation;
+    tf::Matrix3x3(tf::Quaternion(geo_quat.x, geo_quat.y, geo_quat.z, geo_quat.w)).getRPY(roll, pitch, yaw);
+    robot_heading_ = yaw * 180 / M_PI;
+
 }
 
 void NegObsDetect::TransCloudFrame() {
@@ -108,7 +115,7 @@ void NegObsDetect::TransCloudFrame() {
     pcl::PointXYZI point;
     for (std::size_t i=0; i<laser_cloud_size; i++) {
         point = laser_cloud_->points[i];
-        point.intensity = 1.0;
+        point.intensity = laser_cloud_->points[i].intensity;
         this->LeftRotatePoint(point);
         laser_cloud_temp->points.push_back(point);
     }
@@ -152,14 +159,12 @@ void NegObsDetect::CloudImageProjection() {
             continue;
         }
 
-        verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
-        rowIdn = (verticalAngle +ANG_BOTTOM) / ANG_RES_Y;
-        if (rowIdn < 0 || rowIdn >= N_SCAN)
-            continue;
+        rowIdn = laser_cloud_->points[i].intensity;
+        // std::cout<<"Intensity: "<<rowIdn<<std::endl;
 
         horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
 
-        columnIdn = -round((horizonAngle-90.0)/ANG_RES_X) + HORIZON_SCAN/2;
+        columnIdn = -round((horizonAngle-90.0+robot_heading_)/ANG_RES_X) + HORIZON_SCAN/2;
         if (columnIdn >= HORIZON_SCAN)
             columnIdn -= HORIZON_SCAN;
 
@@ -204,45 +209,50 @@ void NegObsDetect::GroundSegmentation() {
         std::cout<<"Initial groud point is invaild!"<<std::endl;
         return;
     }
-    ground_cloud_->points.push_back(laser_cloud_image_->points[id_cur]);
-    while (!ground_queue.empty()) {
-        std::cout<<"current id: "<<id_cur<<std::endl;
-        id_cur = ground_queue.back();
-        std::cout<<"Size of ground_queue: "<<ground_queue.size()<<std::endl;
-        visited_set.insert(id_cur);
-        ground_queue.pop();
-        cur_col = id_cur % HORIZON_SCAN;
-        cur_row = (int)(id_cur/HORIZON_SCAN);
-        for (int i=0; i<8; i++) {
-            // calculate check id, check row id , check col id;
-            check_row = cur_row + dx[i];
-            check_col = cur_col + dy[i];
-            if (check_row < 1 || check_row >= int(N_SCAN/2)) continue;
-            if (check_col < 0) check_col = HORIZON_SCAN - 1;
-            if (check_col >= HORIZON_SCAN) check_col = 0;
-            id_check = check_col + check_row * HORIZON_SCAN;
-            // Terrain Angle Calculation 
-            if (visited_set.count(id_check)) continue;
-            // visited_set.insert(id_check);
-            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
-            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
-            diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
-            angle = atan2(diff_z, sqrt(diff_x*diff_x + diff_y*diff_y) ) * 180 / M_PI;
-            std::cout<<"Adjecent angle: "<<angle<<std::endl;
-            if (abs(angle) <= slope_thresh_) {
-                PointType temp_point;
-                temp_point = laser_cloud_image_->points[id_check];
-                this->RightRotatePointToWorld(temp_point);
-                ground_cloud_->points.push_back(temp_point);
-                ground_queue.push(id_check);
-            }else if(angle < 0) { // negative obstacle
-                PointType temp_point;
-                temp_point = laser_cloud_image_->points[id_check];
-                this->RightRotatePointToWorld(temp_point);
-                neg_obs_cloud_->points.push_back(temp_point);
-            }
-        }
-    }
+    PointType temp_point;
+    temp_point = laser_cloud_image_->points[id_cur];
+    this->RightRotatePointToWorld(temp_point);
+    ground_cloud_->points.push_back(temp_point);
+    std::cout<<"Center Point X: "<<temp_point.x<<"; -- Y: "<<temp_point.y<<"; -- X: "<<temp_point.z<<std::endl;
+    // while (!ground_queue.empty()) {
+    //     std::cout<<"current id: "<<id_cur<<std::endl;
+    //     id_cur = ground_queue.back();
+    //     std::cout<<"Size of ground_queue: "<<ground_queue.size()<<std::endl;
+    //     // bool is_ground = false;
+    //     visited_set.insert(id_cur);
+    //     ground_queue.pop();
+    //     cur_col = id_cur % HORIZON_SCAN;
+    //     cur_row = (int)(id_cur/HORIZON_SCAN);
+    //     for (int i=0; i<8; i++) {
+    //         // calculate check id, check row id , check col id;
+    //         check_row = cur_row + dx[i];
+    //         check_col = cur_col + dy[i];
+    //         if (check_row < 1 || check_row >= int(N_SCAN/2)) continue;
+    //         if (check_col < 0) check_col = HORIZON_SCAN - 1;
+    //         if (check_col >= HORIZON_SCAN) check_col = 0;
+    //         id_check = check_col + check_row * HORIZON_SCAN;
+    //         // Terrain Angle Calculation 
+    //         if (visited_set.count(id_check)) continue;
+    //         // visited_set.insert(id_check);
+    //         diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
+    //         diff_y = laser_cloud_image_->points[id_check].y - laser_cloud_image_->points[id_cur].y;
+    //         diff_z = laser_cloud_image_->points[id_check].z - laser_cloud_image_->points[id_cur].z;
+    //         angle = atan2(diff_z, sqrt(diff_x*diff_x + diff_y*diff_y)) * 180 / M_PI;
+    //         std::cout<<"Adjecent angle: "<<angle<<std::endl;
+    //         if (abs(angle) <= slope_thresh_) {
+    //             PointType temp_point;
+    //             temp_point = laser_cloud_image_->points[id_check];
+    //             this->RightRotatePointToWorld(temp_point);
+    //             ground_cloud_->points.push_back(temp_point);
+    //             ground_queue.push(id_check);
+    //         }else if(angle < 0) { // negative obstacle
+    //             PointType temp_point;
+    //             temp_point = laser_cloud_image_->points[id_check];
+    //             this->RightRotatePointToWorld(temp_point);
+    //             neg_obs_cloud_->points.push_back(temp_point);
+    //         }
+    //     }
+    // }
 }
 
 

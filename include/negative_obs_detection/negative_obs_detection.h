@@ -8,6 +8,7 @@ Organization: CMU Sub-T Explorer Team
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
 #include <pcl/filters/voxel_grid.h>
 #include <velodyne_pointcloud/point_types.h>
@@ -33,25 +34,35 @@ struct Point3D {
     float x;
     float y;
     float z;
+    Point3D() {}
+    Point3D(float _x, float _y, float _z): x(_x), y(_y), z(_z) {}
+    bool operator ==(const Point3D& pt) const
+    {
+        return x == pt.x && y == pt.y && z == pt.z;
+    }
+
     float operator *(const Point3D& pt) const
     {
         return x * pt.x + y * pt.y + z * pt.z;
     }
+
+    Point3D operator *(const float factor) const
+    {
+        return Point3D(x*factor, y*factor, z*factor);
+    }
+
+    Point3D operator /(const float factor) const
+    {
+        return Point3D(x/factor, y/factor, z/factor);
+    }
+
     Point3D operator +(const Point3D& pt) const
     {
-        Point3D result;
-        result.x += pt.x;
-        result.y += pt.y;
-        result.z += pt.z;
-        return result;
+        return Point3D(x+pt.x, y+pt.y, z+pt.z);
     }
     Point3D operator -(const Point3D& pt) const
     {
-        Point3D result;
-        result.x -= pt.x;
-        result.y -= pt.y;
-        result.z -= pt.z;
-        return result;
+        return Point3D(x-pt.x, y-pt.y, z-pt.z);
     }
 };
 
@@ -66,7 +77,6 @@ private:
     ros::NodeHandle nh_;
     ros::Subscriber point_cloud_sub_;
     ros::Subscriber odom_sub_;
-    ros::Publisher point_cloud_pub_;
     ros::Publisher ground_cloud_pub_;
     ros::Publisher cloud_image_pub_;
     ros::Publisher negative_object_border_pub_;
@@ -74,6 +84,7 @@ private:
     std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_, cloud_image_topic_pub_;
     std::string odom_frame_id_;
     double slope_thresh_;
+    double robot_heading_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
