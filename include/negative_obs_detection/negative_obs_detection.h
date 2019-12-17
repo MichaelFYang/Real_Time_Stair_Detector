@@ -5,6 +5,7 @@ Organization: CMU Sub-T Explorer Team
 */
 
 #include <ros/ros.h>
+#include <std_srvs/Empty.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -15,10 +16,14 @@ Organization: CMU Sub-T Explorer Team
 #include <velodyne_pointcloud/rawdata.h>
 #include <unordered_set>
 #include <tf/transform_broadcaster.h>
+#include <vector>
+#include <math.h>
 #include <queue> 
 #include <math.h>
-
 #include <string>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fstream>
 
 #define N_SCAN 16
 #define ANG_RES_Y 2.0
@@ -80,11 +85,16 @@ private:
     ros::Publisher ground_cloud_pub_;
     ros::Publisher cloud_image_pub_;
     ros::Publisher negative_object_border_pub_;
+    ros::ServiceServer kenerl_service_;
     // params
-    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_, cloud_image_topic_pub_;
+    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_;
     std::string odom_frame_id_;
+    std::vector<float> kernel_elem_;
+    std::string kernel_filename_;
+    bool is_kernel_;
     double slope_thresh_;
     double robot_heading_;
+    std::vector<std::vector<float> > elem_martix_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
@@ -103,6 +113,11 @@ private:
     // Operation Functions
     void Initialization();
     void TopicHandle();
+    bool KernelGeneration(std_srvs::Empty::Request &req,
+                                    std_srvs::Empty::Response &res);
+    void ReadKernelFile();
+    void NormColElem(std::vector<float> &elem_col);
+    void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
     void TransCloudFrame();
@@ -111,6 +126,7 @@ private:
     // Tool Functions
     void LeftRotatePoint(pcl::PointXYZI &pnt);
     void RightRotatePointToWorld(pcl::PointXYZI &pnt);
+    float Sigmoid(float x);
     
 
 };

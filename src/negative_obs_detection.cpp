@@ -20,8 +20,14 @@ NegObsDetect::NegObsDetect() {
     if (!nh_.getParam("neg_obs_topic_pub", neg_obs_topic_pub_)) {
         neg_obs_topic_pub_ = "/neg_detect/neg_obstacle";
     }
+    if (!nh_.getParam("kernel_server_topic",kernel_server_topic_)) {
+        kernel_server_topic_ = "/neg_detect/kernel_serve_topic";
+    }
+    if (!nh_.getParam("kernel_filename",kernel_filename_)) {
+        kernel_filename_ = "stair_kernel.txt";
+    }
     if (!nh_.getParam("slope_thresh", slope_thresh_)) {
-    slope_thresh_ = 5.0;
+        slope_thresh_ = 10.0;
     }
     
     this->Initialization();
@@ -34,6 +40,7 @@ void NegObsDetect::Loop() {
     cloud_image_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(cloud_image_topic_pub_,1);
     point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
     odom_sub_ = nh_.subscribe(odom_topic_sub_,1,&NegObsDetect::OdomHandler,this);
+    kenerl_service_ = nh_.advertiseService(kernel_server_topic_,&NegObsDetect::KernelGeneration,this);
 
     ros::Rate rate(1);
     while(ros::ok())
@@ -75,6 +82,11 @@ void NegObsDetect::Initialization() {
     nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.z = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.intensity = -1;
+    elem_martix_.resize(HORIZON_SCAN);
+    for(std::size_t i=0; i<HORIZON_SCAN; i++) {
+        elem_martix_[i].resize(int(N_SCAN/2));
+    }
+    is_kernel_ = false;
     std::cout<<"Initialize Successful"<<std::endl;
 
 }
@@ -130,11 +142,17 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
     pnt.x = tmp_z;
 }
 
+void NegObsDetect::TransToWorld(pcl::PointXYZI &pnt) {
+    pnt.x += robot_pos_.x;
+    pnt.y += robot_pos_.y;
+    pnt.z += robot_pos_.z;
+}
+
 void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
 /* Credit:https://bitbucket.org/cmusubt/misc_utils/src/master/src/misc_utils.cpp */
-    float tmp_x = pnt.x + robot_pos_.x;
-    pnt.x = pnt.y + robot_pos_.y;
-    pnt.y = pnt.z + robot_pos_.z;
+    float tmp_x = pnt.x;
+    pnt.x = pnt.y;
+    pnt.y = pnt.z;
     pnt.z = tmp_x;
 }
 
@@ -174,6 +192,7 @@ void NegObsDetect::CloudImageProjection() {
         // thisPoint.intensity = (float)rowIdn + (float)columnIdn / 10000.0;
         thisPoint.intensity = (float)rowIdn;
         index = columnIdn  + rowIdn * HORIZON_SCAN;
+        this->TransToWorld(thisPoint);
         laser_cloud_image_->points[index] = thisPoint;
         temp_point = thisPoint;
         this->RightRotatePointToWorld(temp_point);
@@ -184,75 +203,88 @@ void NegObsDetect::CloudImageProjection() {
     cloud_image_pub_.publish(cloud_image_ros_cloud_);
 }
 
+void NegObsDetect::NormColElem(std::vector<float> &elem_col) {
+    for (std::size_t i=0; i<elem_col.size(); i++) {
+        if (isnan(elem_col[i])) {
+            elem_col[i] = 0.0;
+            continue;
+        }
+        elem_col[i] = this->Sigmoid(elem_col[i]);
+    }
+}
+
 void NegObsDetect::GroundSegmentation() {
 /* Segment Ground PointCloud -> Operation on laser_cloud_image */
     ground_cloud_->clear();
     neg_obs_cloud_->clear();
-    std::size_t id_cur, id_check;
-    float diff_x, diff_y, diff_z;
+    std::size_t id_cur, id_check, cur_row, cur_col;
     double angle;
+    PointType temp_point;
     std::size_t laser_cloud_size = laser_cloud_image_->points.size();
-    std::unordered_set<std::size_t> visited_set;
-    std::queue<std::size_t> ground_queue;
-
-    int cur_row, cur_col, check_row, check_col;
-    int dx[8] = {-1,-1,-1,0,0,1,1,1};
-    int dy[8] = {-1,0,1,-1,1,-1,0,1};
     /* Start Point*/
     cur_row = 0;
     cur_col = int(HORIZON_SCAN/2);
     /* Start Point*/
-    visited_set.clear();
     id_cur = cur_col + cur_row * HORIZON_SCAN;
-    ground_queue.push(id_cur);
-    if (laser_cloud_image_->points[id_cur].x == std::numeric_limits<float>::quiet_NaN()) {
-        std::cout<<"Initial groud point is invaild!"<<std::endl;
+    std::cout<<"Center Point X: "<<laser_cloud_image_->points[id_cur].x<<"; -- Y: "<<laser_cloud_image_->points[id_cur].y<<"; -- Z: "<<laser_cloud_image_->points[id_cur].z<<std::endl;
+    for (std::size_t k=0; k<HORIZON_SCAN; k++) {
+        for (std::size_t i=0; i<int(N_SCAN/2); i++) {
+            int id_check = k + i*HORIZON_SCAN;
+            temp_point = laser_cloud_image_->points[id_check];
+            elem_martix_[k][i] = temp_point.z - robot_pos_.z;
+            if (k == int(HORIZON_SCAN/2)) {
+                this->RightRotatePointToWorld(temp_point);
+                ground_cloud_->points.push_back(temp_point);
+            } 
+        }
+        this->NormColElem(elem_martix_[k]);
+    }
+}
+
+bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,
+                                    std_srvs::Empty::Response &res) {
+    int center_col = int(HORIZON_SCAN/2);
+    std::ofstream FILE(kernel_filename_);
+    for (std::size_t i=0; i<elem_martix_[center_col].size(); i++) {
+        FILE << elem_martix_[center_col][i];
+        FILE << "\n";
+    }
+    FILE.close();
+    return true;
+}
+
+void NegObsDetect::ReadKernelFile() {
+    // file the kernel from kernel file
+    std::fstream FILE(kernel_filename_);
+    kernel_elem_.clear();
+    std::string line;
+    if (!FILE.good()) {
+        std::cout<<"Cannot Find Kernel File in Path: "<<kernel_filename_<<std::endl;
         return;
     }
-    PointType temp_point;
-    temp_point = laser_cloud_image_->points[id_cur];
-    this->RightRotatePointToWorld(temp_point);
-    ground_cloud_->points.push_back(temp_point);
-    std::cout<<"Center Point X: "<<temp_point.x<<"; -- Y: "<<temp_point.y<<"; -- X: "<<temp_point.z<<std::endl;
-    // while (!ground_queue.empty()) {
-    //     std::cout<<"current id: "<<id_cur<<std::endl;
-    //     id_cur = ground_queue.back();
-    //     std::cout<<"Size of ground_queue: "<<ground_queue.size()<<std::endl;
-    //     // bool is_ground = false;
-    //     visited_set.insert(id_cur);
-    //     ground_queue.pop();
-    //     cur_col = id_cur % HORIZON_SCAN;
-    //     cur_row = (int)(id_cur/HORIZON_SCAN);
-    //     for (int i=0; i<8; i++) {
-    //         // calculate check id, check row id , check col id;
-    //         check_row = cur_row + dx[i];
-    //         check_col = cur_col + dy[i];
-    //         if (check_row < 1 || check_row >= int(N_SCAN/2)) continue;
-    //         if (check_col < 0) check_col = HORIZON_SCAN - 1;
-    //         if (check_col >= HORIZON_SCAN) check_col = 0;
-    //         id_check = check_col + check_row * HORIZON_SCAN;
-    //         // Terrain Angle Calculation 
-    //         if (visited_set.count(id_check)) continue;
-    //         // visited_set.insert(id_check);
-    //         diff_x = laser_cloud_image_->points[id_check].x - laser_cloud_image_->points[id_cur].x;
-    //         diff_y = laser_cloud_image_->points[id_check].y - laser_cloud_image_->points[id_cur].y;
-    //         diff_z = laser_cloud_image_->points[id_check].z - laser_cloud_image_->points[id_cur].z;
-    //         angle = atan2(diff_z, sqrt(diff_x*diff_x + diff_y*diff_y)) * 180 / M_PI;
-    //         std::cout<<"Adjecent angle: "<<angle<<std::endl;
-    //         if (abs(angle) <= slope_thresh_) {
-    //             PointType temp_point;
-    //             temp_point = laser_cloud_image_->points[id_check];
-    //             this->RightRotatePointToWorld(temp_point);
-    //             ground_cloud_->points.push_back(temp_point);
-    //             ground_queue.push(id_check);
-    //         }else if(angle < 0) { // negative obstacle
-    //             PointType temp_point;
-    //             temp_point = laser_cloud_image_->points[id_check];
-    //             this->RightRotatePointToWorld(temp_point);
-    //             neg_obs_cloud_->points.push_back(temp_point);
-    //         }
-    //     }
-    // }
+    while(std::getline(FILE, line)) {
+        std::istringstream is(line);
+        float elem;
+        is >> elem;
+        kernel_elem_.push_back(elem);
+    }
+    is_kernel_ = true;
+    FILE.close();
+}
+
+float NegObsDetect::Sigmoid(float x)
+//Credit Kiyoshi Kawaguchi 2000-06-17; http://www.ece.utep.edu/research/webfuzzy/docs/kk-thesis/kk-thesis-html/node72.html
+{
+    float exp_value;
+    float return_value;
+
+    /*** Exponential calculation ***/
+    exp_value = exp((double) -x);
+
+    /*** Final sigmoid value ***/
+    return_value = 1 / (1 + exp_value);
+
+    return return_value;
 }
 
 
