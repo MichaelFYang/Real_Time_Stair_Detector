@@ -1,0 +1,9 @@
+correlation_thred: 0.135
+laser_topic_sub: /velodyne_cloud_registered
+odom_topic_sub: /integrated_to_map
+cloud_image_topic_pub: /neg_detect/cloud_image
+ground_topic_pub: /neg_detect/ground_cloud
+neg_obs_topic_pub: /neg_detect/stair_topic_pub
+kernel_server_topic: /neg_detect/kernel_serve_topic
+kernel_filename: stair_kernel.txt
+slope_thresh: 10.0

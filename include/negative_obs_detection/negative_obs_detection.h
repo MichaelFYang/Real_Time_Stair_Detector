@@ -84,17 +84,19 @@ private:
     ros::Subscriber odom_sub_;
     ros::Publisher ground_cloud_pub_;
     ros::Publisher cloud_image_pub_;
-    ros::Publisher negative_object_border_pub_;
+    ros::Publisher stair_center_pub_;
     ros::ServiceServer kenerl_service_;
     // params
-    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, neg_obs_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_;
+    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, stair_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_;
     std::string odom_frame_id_;
     std::vector<float> kernel_elem_;
     std::string kernel_filename_;
     bool is_kernel_;
     double slope_thresh_;
     double robot_heading_;
+    float correlation_thred_;
     std::vector<std::vector<float> > elem_martix_;
+    std::vector<float> elem_score_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
@@ -104,11 +106,11 @@ private:
     PointCloudPtr laser_cloud_image_;
     PointCloudPtr laser_cloud_image_world_;
     PointCloudPtr ground_cloud_;
-    PointCloudPtr neg_obs_cloud_;
+    PointCloudPtr stair_center_cloud_;
     sensor_msgs::PointCloud2ConstPtr cloud_msg_;
     sensor_msgs::PointCloud2 ground_ros_cloud_;
     sensor_msgs::PointCloud2 cloud_image_ros_cloud_;
-    sensor_msgs::PointCloud2 neg_obs_ros_cloud_; 
+    sensor_msgs::PointCloud2 stair_center_ros_cloud_; 
 
     // Operation Functions
     void Initialization();
@@ -123,6 +125,7 @@ private:
     void TransCloudFrame();
     void GroundSegmentation();
     void CloudImageProjection();
+    void SimularityCalculation();
     // Tool Functions
     void LeftRotatePoint(pcl::PointXYZI &pnt);
     void RightRotatePointToWorld(pcl::PointXYZI &pnt);

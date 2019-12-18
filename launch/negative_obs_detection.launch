@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="neg_obs_detection" type="neg_obs_detection_node" name="neg_obs_dectection_node" output="screen">
+    <node pkg="neg_obs_detection" type="neg_obs_detection_node" name="neg_obs_dectection" output="screen">
         <rosparam command="load" file="$(find neg_obs_detection)/config/default.yaml" />
     </node>
 </launch>
