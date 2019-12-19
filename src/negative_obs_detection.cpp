@@ -6,7 +6,7 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
-        correlation_thred_ = 0.9;
+        correlation_thred_ = 0.75;
     }
     if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
@@ -265,15 +265,24 @@ void NegObsDetect::GroundSegmentation() {
 /* Segment Ground PointCloud -> Operation on laser_cloud_image */
     ground_cloud_->clear();
     PointType temp_point;
+    float angle_down, angle_up;
     std::size_t laser_cloud_size = laser_cloud_image_->points.size();
     /* Start Point*/
     for (std::size_t k=0; k<HORIZON_SCAN; k++) {
         for (std::size_t i=0; i<int(N_SCAN/2); i++) {
+            this->NeighberAngleUpdate(k, i, angle_down, angle_up);
             int id_check = k + i*HORIZON_SCAN;
-            temp_point = laser_cloud_image_->points[id_check];
-            elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
-            elem_matrix_[k][i].y = 0; // DO NOT USE Y
-            elem_matrix_[k][i].z = temp_point.z - robot_pos_.z + LIDAR_H;
+            if (angle_down < slope_thresh_ && angle_up < slope_thresh_) {
+                temp_point = laser_cloud_image_->points[id_check];
+                elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
+                elem_matrix_[k][i].y = 0; // DO NOT USE Y
+                elem_matrix_[k][i].z = temp_point.z - robot_pos_.z + LIDAR_H;
+            }else {
+                elem_matrix_[k][i].x = 0;
+                elem_matrix_[k][i].y = 0; // DO NOT USE Y
+                elem_matrix_[k][i].z = 0;
+            }
+            
             if (k == int(HORIZON_SCAN/2)) {
                 this->RightRotatePointToWorld(temp_point);
                 ground_cloud_->points.push_back(temp_point);
@@ -281,6 +290,32 @@ void NegObsDetect::GroundSegmentation() {
         }
         this->NormColElem(elem_matrix_[k]);
     }
+}
+
+void NegObsDetect::NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up) {
+    PointType check_point, down_point, up_point;
+    int id_check = col + row*HORIZON_SCAN;
+    int id_down, id_up;
+    float diff_x_down, diff_y_down, diff_z_down,diff_x_up, diff_y_up, diff_z_up;
+    if (row == 0){
+        id_down = col + row*HORIZON_SCAN;
+        id_check = col + (row+1)*HORIZON_SCAN;
+        id_up = col + (row+2)*HORIZON_SCAN;
+    }else{
+        id_down = col + (row-1)*HORIZON_SCAN;
+        id_up = col + (row+1)*HORIZON_SCAN;
+    }
+    check_point = laser_cloud_image_->points[id_check];
+    down_point = laser_cloud_image_->points[id_down];
+    up_point = laser_cloud_image_->points[id_up];
+    diff_x_down = check_point.x - down_point.x;
+    diff_y_down = check_point.y - down_point.y;
+    diff_z_down = check_point.z - down_point.z;
+    diff_x_up = up_point.x - check_point.x;
+    diff_y_up = up_point.y - check_point.y;
+    diff_z_up = up_point.z - check_point.z;
+    angle_down = fabs(atan2(diff_z_down, sqrt(diff_x_down*diff_x_down + diff_y_down*diff_y_down))*180/M_PI);
+    angle_up = fabs(atan2(diff_z_up, sqrt(diff_x_up*diff_x_up + diff_y_up*diff_y_up))*180/M_PI); 
 }
 
 bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,

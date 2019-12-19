@@ -119,6 +119,7 @@ private:
     void TopicHandle();
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
+    void NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up);
     void ReadKernelFile();
     void NormColElem(std::vector<Point3D> &elem_col);
     void TransToWorld(pcl::PointXYZI &pnt);
