@@ -27,6 +27,7 @@ Organization: CMU Sub-T Explorer Team
 #include <fstream>
 
 #define N_SCAN 16
+#define LIDAR_H 1.0
 #define ANG_RES_Y 2.0
 #define ANG_RES_X  0.2
 #define ANG_BOTTOM 15.1

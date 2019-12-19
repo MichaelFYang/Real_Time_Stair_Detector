@@ -6,7 +6,7 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
-        correlation_thred_ = 0.90;
+        correlation_thred_ = 0.9;
     }
     if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
@@ -217,12 +217,12 @@ void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
         if (isnan(elem_col[i].x) ) {
             elem_col[i].x = 0.0;
         }else {
-            elem_col[i].x = this->Sigmoid(elem_col[i].x);
+            elem_col[i].x = this->ReLu(elem_col[i].x);
         }
         if (isnan(elem_col[i].z) ) {
             elem_col[i].z = 0.0;
         }else {
-            elem_col[i].z = this->Sigmoid(elem_col[i].z);
+            elem_col[i].z = this->ReLu(elem_col[i].z);
         }
         sum_x += elem_col[i].x*elem_col[i].x; 
         sum_z += elem_col[i].z*elem_col[i].z;  
@@ -251,7 +251,7 @@ void NegObsDetect::SimularityCalculation() {
         }
         elem_score_[i].x = temp_score_dist;
         elem_score_[i].z = temp_score_z;
-        if (elem_score_[i].x > correlation_thred_ && elem_score_[i].z > correlation_thred_) {
+        if (elem_score_[i].z > correlation_thred_) {
             int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
             temp_point = laser_cloud_image_->points[id_check];
             this->RightRotatePointToWorld(temp_point);
@@ -273,7 +273,7 @@ void NegObsDetect::GroundSegmentation() {
             temp_point = laser_cloud_image_->points[id_check];
             elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
             elem_matrix_[k][i].y = 0; // DO NOT USE Y
-            elem_matrix_[k][i].z = temp_point.z - robot_pos_.z;
+            elem_matrix_[k][i].z = temp_point.z - robot_pos_.z + LIDAR_H;
             if (k == int(HORIZON_SCAN/2)) {
                 this->RightRotatePointToWorld(temp_point);
                 ground_cloud_->points.push_back(temp_point);
