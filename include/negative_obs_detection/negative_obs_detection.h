@@ -8,6 +8,7 @@ Organization: CMU Sub-T Explorer Team
 #include <std_srvs/Empty.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
+#include <algorithm>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
@@ -19,14 +20,14 @@ Organization: CMU Sub-T Explorer Team
 #include <tf/transform_broadcaster.h>
 #include <vector>
 #include <math.h>
-#include <queue> 
+#include <deque> 
 #include <math.h>
 #include <string>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fstream>
 
-#define N_SCAN 16
+#define N_SCAN 16 // N_SCAN/2 matters
 #define LIDAR_H 1.0
 #define ANG_RES_Y 2.0
 #define ANG_RES_X  0.2
@@ -93,12 +94,16 @@ private:
     std::string odom_frame_id_;
     std::vector<Point3D> kernel_elem_;
     std::string kernel_filename_;
-    bool is_kernel_;
-    double slope_thresh_;
+    bool is_kernel_, is_inited_;
+    float slope_thresh_;
+    float flat_thresh_;
     double robot_heading_;
     float correlation_thred_;
+    int col_filter_size_;
+    int frame_filter_size_;
     std::vector<std::vector<Point3D> > elem_matrix_;
     std::vector<Point3D> elem_score_;
+    std::deque<std::vector<Point3D> > frame_elem_score_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
@@ -120,6 +125,8 @@ private:
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
     void NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up);
+    void FilterColumn();
+    void FilterFrames();
     void ReadKernelFile();
     void NormColElem(std::vector<Point3D> &elem_col);
     void TransToWorld(pcl::PointXYZI &pnt);

@@ -6,7 +6,7 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
-        correlation_thred_ = 0.75;
+        correlation_thred_ = 0.85;
     }
     if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
@@ -32,7 +32,15 @@ NegObsDetect::NegObsDetect() {
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
         slope_thresh_ = 60.0;
     }
-    
+    if (!nh_.getParam("/neg_obs_detection/slope_thresh", flat_thresh_)) {
+        flat_thresh_ = 10.0;
+    }
+    if (!nh_.getParam("/neg_obs_detection/filter_size", col_filter_size_)) {
+        col_filter_size_ = 20;
+    }
+    if (!nh_.getParam("/neg_obs_detection/filter_size", frame_filter_size_)) {
+        frame_filter_size_ = 3;
+    }
     this->Initialization();
 }
 
@@ -44,8 +52,7 @@ void NegObsDetect::Loop() {
     point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
     odom_sub_ = nh_.subscribe(odom_topic_sub_,1,&NegObsDetect::OdomHandler,this);
     kenerl_service_ = nh_.advertiseService(kernel_server_topic_,&NegObsDetect::KernelGeneration,this);
-
-    ros::Rate rate(1);
+    ros::Rate rate(5);
     this->ReadKernelFile();
     if (!is_kernel_) return;
     while(ros::ok())
@@ -58,7 +65,7 @@ void NegObsDetect::Loop() {
             this->GroundSegmentation();
             // std::cout<<"Debug Here: 3"<<std::endl;
             this->SimularityCalculation();
-            this->TopicHandle();
+            if(is_inited_) this->TopicHandle();
         }else std::cout<<"The Point Cloud is Empty now!"<<std::endl;
         rate.sleep();
     }
@@ -94,6 +101,8 @@ void NegObsDetect::Initialization() {
     }
     elem_score_.resize(HORIZON_SCAN);
     is_kernel_ = false;
+    is_inited_ = false;
+    frame_elem_score_.clear();
     std::cout<<"Initialize Successful"<<std::endl;
 
 }
@@ -213,14 +222,20 @@ void NegObsDetect::CloudImageProjection() {
 void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
     float sum_x = 0;
     float sum_z = 0;
+    float num_row = elem_col.size();
+    float counter_x = 0;
+    float counter_z = 0;
+    float decay_factore_x, decay_factore_z;
     for (std::size_t i=0; i<elem_col.size(); i++) {
-        if (isnan(elem_col[i].x) ) {
+        if (isnan(elem_col[i].x)) {
             elem_col[i].x = 0.0;
+            counter_x ++;
         }else {
             elem_col[i].x = this->ReLu(elem_col[i].x);
         }
-        if (isnan(elem_col[i].z) ) {
+        if (isnan(elem_col[i].z)) {
             elem_col[i].z = 0.0;
+            counter_z ++;
         }else {
             elem_col[i].z = this->ReLu(elem_col[i].z);
         }
@@ -228,13 +243,15 @@ void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
         sum_z += elem_col[i].z*elem_col[i].z;  
     }
     if (sum_x != 0 ) {
-        for (std::size_t i=0; i<elem_col.size(); i++) {
-            elem_col[i].x = elem_col[i].x/sqrt(sum_x);
+        decay_factore_x = (num_row - counter_x) / num_row;
+        for (std::size_t i=0; i<elem_col.size(); i++) {     
+            elem_col[i].x = elem_col[i].x/sqrt(sum_x) *decay_factore_x;
         }
     }
     if (sum_z != 0 ) {
+        decay_factore_z = (num_row - counter_z) / num_row;
         for (std::size_t i=0; i<elem_col.size(); i++) {
-            elem_col[i].z = elem_col[i].z/sqrt(sum_z);
+            elem_col[i].z = elem_col[i].z/sqrt(sum_z)*decay_factore_z;
         }
     }
 }
@@ -251,14 +268,20 @@ void NegObsDetect::SimularityCalculation() {
         }
         elem_score_[i].x = temp_score_dist;
         elem_score_[i].z = temp_score_z;
-        if (elem_score_[i].z > correlation_thred_) {
-            int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
-            temp_point = laser_cloud_image_->points[id_check];
-            this->RightRotatePointToWorld(temp_point);
-            stair_center_cloud_->push_back(temp_point);
-        }
     }
-    std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
+    this->FilterColumn();
+    this->FilterFrames();
+    if (is_inited_) {
+        for (std::size_t i=0; i<HORIZON_SCAN; i++) {
+            if (elem_score_[i].z > correlation_thred_) {
+                int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
+                temp_point = laser_cloud_image_->points[id_check];
+                this->RightRotatePointToWorld(temp_point);
+                stair_center_cloud_->push_back(temp_point);
+            }
+        }
+        std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
+    }
 }
 
 void NegObsDetect::GroundSegmentation() {
@@ -272,7 +295,7 @@ void NegObsDetect::GroundSegmentation() {
         for (std::size_t i=0; i<int(N_SCAN/2); i++) {
             this->NeighberAngleUpdate(k, i, angle_down, angle_up);
             int id_check = k + i*HORIZON_SCAN;
-            if (angle_down < slope_thresh_ && angle_up < slope_thresh_) {
+            if (angle_down < slope_thresh_ && angle_up < slope_thresh_ && angle_down > flat_thresh_ && angle_up > flat_thresh_) {
                 temp_point = laser_cloud_image_->points[id_check];
                 elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
                 elem_matrix_[k][i].y = 0; // DO NOT USE Y
@@ -289,6 +312,56 @@ void NegObsDetect::GroundSegmentation() {
             } 
         }
         this->NormColElem(elem_matrix_[k]);
+    }
+}
+
+void NegObsDetect::FilterColumn() {
+    for (int i=0; i<HORIZON_SCAN; i++) {
+        int begin_id = std::max(0,i-col_filter_size_);
+        float sum_x = 0;
+        float sum_z = 0;
+        for (int k=0; k<2*col_filter_size_+1; k++) {
+            int check_id = (begin_id + k) % HORIZON_SCAN;
+            sum_x += elem_score_[i].x;
+            sum_z += elem_score_[i].z;
+        }
+        sum_x = sum_x / (2*col_filter_size_+1);
+        sum_z = sum_z / (2*col_filter_size_+1);
+        elem_score_[i].x = sum_x;
+        elem_score_[i].z = sum_z;
+    }
+}
+
+void NegObsDetect::FilterFrames() {
+    if (frame_elem_score_.size() >= frame_filter_size_) {
+        frame_elem_score_.pop_front();
+        is_inited_ = true;
+    }
+    frame_elem_score_.push_back(elem_score_);
+    int num_frames = frame_elem_score_.size();
+    for (int i=0; i<HORIZON_SCAN; i++) { // column loop
+        float sum_x = 0;
+        float sum_z = 0;
+        int counter_x = 0;
+        int counter_z = 0;
+        for (int k=0; k<num_frames; k++) { //frame loop
+            if (frame_elem_score_[k][i].x != 0) {
+                sum_x += frame_elem_score_[k][i].x;
+                counter_x ++;
+            }
+            if (frame_elem_score_[k][i].z != 0) {
+                sum_z += frame_elem_score_[k][i].z;
+                counter_z ++;
+            }
+        }
+        if (counter_x != 0) {
+            sum_x = sum_x / counter_x;
+            elem_score_[i].x = sum_x;
+        }
+        if (counter_z != 0) {
+            sum_z = sum_z / counter_z;
+            elem_score_[i].z = sum_z;
+        }
     }
 }
 
