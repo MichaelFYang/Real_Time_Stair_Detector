@@ -6,7 +6,7 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
-        correlation_thred_ = 0.135;
+        correlation_thred_ = 0.90;
     }
     if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
@@ -30,7 +30,7 @@ NegObsDetect::NegObsDetect() {
         kernel_filename_ = "stair_kernel.txt";
     }
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
-        slope_thresh_ = 10.0;
+        slope_thresh_ = 60.0;
     }
     
     this->Initialization();
@@ -88,9 +88,9 @@ void NegObsDetect::Initialization() {
     nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.z = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.intensity = -1;
-    elem_martix_.resize(HORIZON_SCAN);
+    elem_matrix_.resize(HORIZON_SCAN);
     for(std::size_t i=0; i<HORIZON_SCAN; i++) {
-        elem_martix_[i].resize(int(N_SCAN/2));
+        elem_matrix_[i].resize(int(N_SCAN/2));
     }
     elem_score_.resize(HORIZON_SCAN);
     is_kernel_ = false;
@@ -210,17 +210,32 @@ void NegObsDetect::CloudImageProjection() {
     cloud_image_pub_.publish(cloud_image_ros_cloud_);
 }
 
-void NegObsDetect::NormColElem(std::vector<float> &elem_col) {
-    float sum = 0;
+void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
+    float sum_x = 0;
+    float sum_z = 0;
     for (std::size_t i=0; i<elem_col.size(); i++) {
-        if (isnan(elem_col[i])) {
-            elem_col[i] = 0.0;
+        if (isnan(elem_col[i].x) ) {
+            elem_col[i].x = 0.0;
+        }else {
+            elem_col[i].x = this->Sigmoid(elem_col[i].x);
         }
-        else elem_col[i] = this->Sigmoid(elem_col[i]);
-        sum += elem_col[i]; 
+        if (isnan(elem_col[i].z) ) {
+            elem_col[i].z = 0.0;
+        }else {
+            elem_col[i].z = this->Sigmoid(elem_col[i].z);
+        }
+        sum_x += elem_col[i].x*elem_col[i].x; 
+        sum_z += elem_col[i].z*elem_col[i].z;  
     }
-    for (std::size_t i=0; i<elem_col.size(); i++) {
-        elem_col[i] = elem_col[i]/sum;
+    if (sum_x != 0 ) {
+        for (std::size_t i=0; i<elem_col.size(); i++) {
+            elem_col[i].x = elem_col[i].x/sqrt(sum_x);
+        }
+    }
+    if (sum_z != 0 ) {
+        for (std::size_t i=0; i<elem_col.size(); i++) {
+            elem_col[i].z = elem_col[i].z/sqrt(sum_z);
+        }
     }
 }
 
@@ -228,45 +243,43 @@ void NegObsDetect::SimularityCalculation() {
     stair_center_cloud_->clear();
     PointType temp_point;
     for (std::size_t i=0; i<HORIZON_SCAN; i++) {
-        float temp_score = 0.0;
+        float temp_score_z = 0.0;
+        float temp_score_dist = 0.0;
         for (std::size_t k=0; k<int(N_SCAN/2); k++) {
-            temp_score += elem_martix_[i][k] * kernel_elem_[k];
+            temp_score_z += elem_matrix_[i][k].z * kernel_elem_[k].z;
+            temp_score_dist += elem_matrix_[i][k].x * kernel_elem_[k].x;
         }
-        elem_score_[i] = temp_score;
-        if (elem_score_[i] > correlation_thred_) {
+        elem_score_[i].x = temp_score_dist;
+        elem_score_[i].z = temp_score_z;
+        if (elem_score_[i].x > correlation_thred_ && elem_score_[i].z > correlation_thred_) {
             int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
             temp_point = laser_cloud_image_->points[id_check];
             this->RightRotatePointToWorld(temp_point);
             stair_center_cloud_->push_back(temp_point);
         }
     }
-    std::cout<<"Center Simularity Score: "<<elem_score_[int(HORIZON_SCAN/2)]<<std::endl;
+    std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
 }
 
 void NegObsDetect::GroundSegmentation() {
 /* Segment Ground PointCloud -> Operation on laser_cloud_image */
     ground_cloud_->clear();
-    std::size_t id_cur, id_check, cur_row, cur_col;
-    double angle;
     PointType temp_point;
     std::size_t laser_cloud_size = laser_cloud_image_->points.size();
     /* Start Point*/
-    cur_row = 0;
-    cur_col = int(HORIZON_SCAN/2);
-    /* Start Point*/
-    id_cur = cur_col + cur_row * HORIZON_SCAN;
-    // std::cout<<"Center Point X: "<<laser_cloud_image_->points[id_cur].x<<"; -- Y: "<<laser_cloud_image_->points[id_cur].y<<"; -- Z: "<<laser_cloud_image_->points[id_cur].z<<std::endl;
     for (std::size_t k=0; k<HORIZON_SCAN; k++) {
         for (std::size_t i=0; i<int(N_SCAN/2); i++) {
             int id_check = k + i*HORIZON_SCAN;
             temp_point = laser_cloud_image_->points[id_check];
-            elem_martix_[k][i] = temp_point.z - robot_pos_.z;
+            elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
+            elem_matrix_[k][i].y = 0; // DO NOT USE Y
+            elem_matrix_[k][i].z = temp_point.z - robot_pos_.z;
             if (k == int(HORIZON_SCAN/2)) {
                 this->RightRotatePointToWorld(temp_point);
                 ground_cloud_->points.push_back(temp_point);
             } 
         }
-        this->NormColElem(elem_martix_[k]);
+        this->NormColElem(elem_matrix_[k]);
     }
 }
 
@@ -274,8 +287,9 @@ bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res) {
     int center_col = int(HORIZON_SCAN/2);
     std::ofstream FILE(kernel_filename_);
-    for (std::size_t i=0; i<elem_martix_[center_col].size(); i++) {
-        FILE << elem_martix_[center_col][i];
+    for (std::size_t i=0; i<elem_matrix_[center_col].size(); i++) {
+        FILE << elem_matrix_[center_col][i].x<<" ";
+        FILE << elem_matrix_[center_col][i].z;
         FILE << "\n";
     }
     FILE.close();
@@ -293,12 +307,18 @@ void NegObsDetect::ReadKernelFile() {
     }
     while(std::getline(FILE, line)) {
         std::istringstream is(line);
-        float elem;
-        is >> elem;
+        Point3D elem;
+        is >> elem.x;
+        is >> elem.z;
         kernel_elem_.push_back(elem);
     }
     is_kernel_ = true;
     FILE.close();
+}
+
+float NegObsDetect::ReLu(float x) {
+    if (x>0) return x;
+    else return 0;
 }
 
 float NegObsDetect::Sigmoid(float x)

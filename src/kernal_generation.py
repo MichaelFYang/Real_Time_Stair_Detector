@@ -12,10 +12,10 @@ if __name__ == "__main__":
     for i in range(8):
         elem = (i+1) * 0.2
         elem = Sigmoid(elem)
-        total_sum += elem
+        total_sum += elem*elem
         kernal.append(elem)
     for i in range(8):
-        kernal[i] = kernal[i] / total_sum
+        kernal[i] = kernal[i] / np.sqrt(total_sum)
     print (kernal)
 
     

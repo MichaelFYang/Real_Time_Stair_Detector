@@ -11,6 +11,7 @@ Organization: CMU Sub-T Explorer Team
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
 #include <velodyne_pointcloud/point_types.h>
 #include <velodyne_pointcloud/rawdata.h>
@@ -89,14 +90,14 @@ private:
     // params
     std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, stair_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_;
     std::string odom_frame_id_;
-    std::vector<float> kernel_elem_;
+    std::vector<Point3D> kernel_elem_;
     std::string kernel_filename_;
     bool is_kernel_;
     double slope_thresh_;
     double robot_heading_;
     float correlation_thred_;
-    std::vector<std::vector<float> > elem_martix_;
-    std::vector<float> elem_score_;
+    std::vector<std::vector<Point3D> > elem_matrix_;
+    std::vector<Point3D> elem_score_;
     nav_msgs::Odometry odom_;
     Point3D robot_pos_;
     PointType nanPoint_;
@@ -118,7 +119,7 @@ private:
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
     void ReadKernelFile();
-    void NormColElem(std::vector<float> &elem_col);
+    void NormColElem(std::vector<Point3D> &elem_col);
     void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
@@ -130,6 +131,7 @@ private:
     void LeftRotatePoint(pcl::PointXYZI &pnt);
     void RightRotatePointToWorld(pcl::PointXYZI &pnt);
     float Sigmoid(float x);
+    float ReLu(float x);
     
 
 };
