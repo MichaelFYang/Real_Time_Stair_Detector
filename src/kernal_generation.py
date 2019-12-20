@@ -14,13 +14,14 @@ def ReLu(x):
 
 if __name__ == "__main__":
     kernal = []
+    kernel_size = 5
     total_sum = 0
-    for i in range(8):
-        elem = i * 0.5
-        elem = ReLu(elem)
+    for i in range(kernel_size):
+        elem = (i+1) * 0.5
+        elem = Sigmoid(elem)
         total_sum += elem*elem
         kernal.append(elem)
-    for i in range(8):
+    for i in range(kernel_size):
         kernal[i] = kernal[i] / np.sqrt(total_sum)
     print (kernal)
 

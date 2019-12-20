@@ -6,7 +6,7 @@ NegObsDetect::NegObsDetect() {
 /* TODO! */
      // Initai ROS params
     if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
-        correlation_thred_ = 0.85;
+        correlation_thred_ = 0.925;
     }
     if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
@@ -30,16 +30,16 @@ NegObsDetect::NegObsDetect() {
         kernel_filename_ = "stair_kernel.txt";
     }
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
-        slope_thresh_ = 60.0;
+        slope_thresh_ = 50.0;
     }
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", flat_thresh_)) {
         flat_thresh_ = 10.0;
     }
     if (!nh_.getParam("/neg_obs_detection/filter_size", col_filter_size_)) {
-        col_filter_size_ = 20;
+        col_filter_size_ = 25;
     }
     if (!nh_.getParam("/neg_obs_detection/filter_size", frame_filter_size_)) {
-        frame_filter_size_ = 10;
+        frame_filter_size_ = 30;
     }
     this->Initialization();
 }
@@ -219,25 +219,29 @@ void NegObsDetect::CloudImageProjection() {
     cloud_image_pub_.publish(cloud_image_ros_cloud_);
 }
 
-void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
+std::vector<Point3D> NegObsDetect::NormColElem(const std::vector<Point3D> &elem_col, bool is_process) {
+    std::vector<Point3D> new_elem_col;
     float sum_x = 0;
     float sum_z = 0;
     float num_row = elem_col.size();
     float counter_x = 0;
     float counter_z = 0;
     float decay_factore_x, decay_factore_z;
+    new_elem_col = elem_col;
     for (std::size_t i=0; i<elem_col.size(); i++) {
-        if (isnan(elem_col[i].x)) {
-            elem_col[i].x = 0.0;
-            counter_x ++;
-        }else {
-            elem_col[i].x = this->ReLu(elem_col[i].x);
-        }
-        if (isnan(elem_col[i].z)) {
-            elem_col[i].z = 0.0;
-            counter_z ++;
-        }else {
-            elem_col[i].z = this->ReLu(elem_col[i].z);
+        if(is_process) {
+            if (isnan(elem_col[i].x)) {
+                new_elem_col[i].x = 0.0;
+                counter_x ++;
+            }else {
+                new_elem_col[i].x = this->ReLu(elem_col[i].x);
+            }
+            if (isnan(elem_col[i].z)) {
+                new_elem_col[i].z = 0.0;
+                counter_z ++;
+            }else {
+                new_elem_col[i].z = this->ReLu(elem_col[i].z);
+            }
         }
         sum_x += elem_col[i].x*elem_col[i].x; 
         sum_z += elem_col[i].z*elem_col[i].z;  
@@ -245,29 +249,43 @@ void NegObsDetect::NormColElem(std::vector<Point3D> &elem_col) {
     if (sum_x != 0 ) {
         decay_factore_x = (num_row - counter_x) / num_row;
         for (std::size_t i=0; i<elem_col.size(); i++) {     
-            elem_col[i].x = elem_col[i].x/sqrt(sum_x) *decay_factore_x;
+            new_elem_col[i].x = new_elem_col[i].x/sqrt(sum_x) *decay_factore_x;
         }
     }
     if (sum_z != 0 ) {
         decay_factore_z = (num_row - counter_z) / num_row;
         for (std::size_t i=0; i<elem_col.size(); i++) {
-            elem_col[i].z = elem_col[i].z/sqrt(sum_z)*decay_factore_z;
+            new_elem_col[i].z = new_elem_col[i].z/sqrt(sum_z)*decay_factore_z;
         }
     }
+    return new_elem_col;
 }
 
 void NegObsDetect::SimularityCalculation() {
     stair_center_cloud_->clear();
     PointType temp_point;
+    int num_windows = int(N_SCAN/2) - KERNEL_SIZE + 1;
     for (std::size_t i=0; i<HORIZON_SCAN; i++) {
-        float temp_score_z = 0.0;
-        float temp_score_dist = 0.0;
-        for (std::size_t k=0; k<int(N_SCAN/2); k++) {
-            temp_score_z += elem_matrix_[i][k].z * kernel_elem_[k].z;
-            temp_score_dist += elem_matrix_[i][k].x * kernel_elem_[k].x;
+        float max_z = 0.0;
+        float max_dist = 0.0;
+        for (int n=0; n<num_windows; n++) {
+            float temp_score_z = 0.0;
+            float temp_score_dist = 0.0;
+            std::vector<Point3D> new_elem_col = std::vector<Point3D>(elem_matrix_[i].begin()+n, elem_matrix_[i].begin()+n+KERNEL_SIZE);
+            new_elem_col = this->NormColElem(new_elem_col, false);
+            for (std::size_t k=0; k<KERNEL_SIZE; k++) {
+                temp_score_z += new_elem_col[k].z * kernel_elem_[k].z;
+                temp_score_dist += new_elem_col[k].x * kernel_elem_[k].x;
+            }
+            if (temp_score_z > max_z) {
+                max_z = temp_score_z;
+            }
+            if (temp_score_dist > max_dist) {
+                max_dist = temp_score_dist;
+            }
         }
-        elem_score_[i].x = temp_score_dist;
-        elem_score_[i].z = temp_score_z;
+        elem_score_[i].x = max_dist;
+        elem_score_[i].z = max_z;
     }
     this->FilterColumn();
     this->FilterFrames();
@@ -311,7 +329,7 @@ void NegObsDetect::GroundSegmentation() {
                 ground_cloud_->points.push_back(temp_point);
             } 
         }
-        this->NormColElem(elem_matrix_[k]);
+        elem_matrix_[k] = this->NormColElem(elem_matrix_[k], true);
     }
 }
 

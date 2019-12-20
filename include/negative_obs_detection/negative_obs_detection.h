@@ -28,7 +28,7 @@ Organization: CMU Sub-T Explorer Team
 #include <fstream>
 
 #define N_SCAN 16 // N_SCAN/2 matters
-#define LIDAR_H 1.0
+#define LIDAR_H 1.2
 #define ANG_RES_Y 2.0
 #define ANG_RES_X  0.2
 #define KERNEL_SIZE 5
@@ -129,7 +129,7 @@ private:
     void FilterColumn();
     void FilterFrames();
     void ReadKernelFile();
-    void NormColElem(std::vector<Point3D> &elem_col);
+    std::vector<Point3D> NormColElem(const std::vector<Point3D> &elem_col, bool is_process);
     void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
