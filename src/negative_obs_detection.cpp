@@ -39,7 +39,7 @@ NegObsDetect::NegObsDetect() {
         col_filter_size_ = 20;
     }
     if (!nh_.getParam("/neg_obs_detection/filter_size", frame_filter_size_)) {
-        frame_filter_size_ = 3;
+        frame_filter_size_ = 10;
     }
     this->Initialization();
 }
@@ -198,7 +198,7 @@ void NegObsDetect::CloudImageProjection() {
 
         horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
 
-        columnIdn = -round((horizonAngle-90.0+robot_heading_)/ANG_RES_X) + HORIZON_SCAN/2;
+        columnIdn = -round((horizonAngle-90.0)/ANG_RES_X) + HORIZON_SCAN/2;
         if (columnIdn >= HORIZON_SCAN)
             columnIdn -= HORIZON_SCAN;
 

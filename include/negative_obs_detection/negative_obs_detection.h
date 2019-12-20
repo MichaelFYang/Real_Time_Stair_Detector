@@ -31,6 +31,7 @@ Organization: CMU Sub-T Explorer Team
 #define LIDAR_H 1.0
 #define ANG_RES_Y 2.0
 #define ANG_RES_X  0.2
+#define KERNEL_SIZE 5
 #define ANG_BOTTOM 15.1
 #define HORIZON_SCAN  1800
 
