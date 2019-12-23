@@ -27,19 +27,19 @@ NegObsDetect::NegObsDetect() {
         kernel_server_topic_ = "/neg_detect/kernel_serve_topic";
     }
     if (!nh_.getParam("/neg_obs_detection/kernel_filename",kernel_filename_)) {
-        kernel_filename_ = "stair_kernel.txt";
+        kernel_filename_ = "/stair_kernel.txt";
     }
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
         slope_thresh_ = 50.0;
     }
-    if (!nh_.getParam("/neg_obs_detection/slope_thresh", flat_thresh_)) {
+    if (!nh_.getParam("/neg_obs_detection/flat_thresh", flat_thresh_)) {
         flat_thresh_ = 10.0;
     }
-    if (!nh_.getParam("/neg_obs_detection/filter_size", col_filter_size_)) {
+    if (!nh_.getParam("/neg_obs_detection/col_filter_size", col_filter_size_)) {
         col_filter_size_ = 25;
     }
-    if (!nh_.getParam("/neg_obs_detection/filter_size", frame_filter_size_)) {
-        frame_filter_size_ = 30;
+    if (!nh_.getParam("/neg_obs_detection/frame_filter_size", frame_filter_size_)) {
+        frame_filter_size_ = 20;
     }
     this->Initialization();
 }
@@ -313,8 +313,8 @@ void NegObsDetect::GroundSegmentation() {
         for (std::size_t i=0; i<int(N_SCAN/2); i++) {
             this->NeighberAngleUpdate(k, i, angle_down, angle_up);
             int id_check = k + i*HORIZON_SCAN;
+            temp_point = laser_cloud_image_->points[id_check];
             if (angle_down < slope_thresh_ && angle_up < slope_thresh_ && angle_down > flat_thresh_ && angle_up > flat_thresh_) {
-                temp_point = laser_cloud_image_->points[id_check];
                 elem_matrix_[k][i].x = sqrt((temp_point.x-robot_pos_.x)*(temp_point.x-robot_pos_.x)+(temp_point.y-robot_pos_.y)*(temp_point.y-robot_pos_.y));
                 elem_matrix_[k][i].y = 0; // DO NOT USE Y
                 elem_matrix_[k][i].z = temp_point.z - robot_pos_.z + LIDAR_H;
@@ -324,7 +324,7 @@ void NegObsDetect::GroundSegmentation() {
                 elem_matrix_[k][i].z = 0;
             }
             
-            if (k == int(HORIZON_SCAN/2)) {
+            if (k % 100 == 0) {
                 this->RightRotatePointToWorld(temp_point);
                 ground_cloud_->points.push_back(temp_point);
             } 
