@@ -5,6 +5,7 @@ Organization: CMU Sub-T Explorer Team
 */
 
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <std_srvs/Empty.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>

@@ -5,7 +5,7 @@ cloud_image_topic_pub: /neg_detect/cloud_image
 ground_topic_pub: /neg_detect/ground_cloud
 neg_obs_topic_pub: /neg_detect/stair_topic_pub
 kernel_server_topic: /neg_detect/kernel_serve_topic
-kernel_filename: /home/fanyang/stair_kernel.txt
+kernel_filename: stair_kernel.txt
 slope_thresh: 50.0
 flat_thresh: 10.0
 col_filter_size: 25

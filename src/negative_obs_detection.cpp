@@ -424,6 +424,7 @@ bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,
 
 void NegObsDetect::ReadKernelFile() {
     // file the kernel from kernel file
+    kernel_filename_ = ros::package::getPath("neg_obs_detection") + "/data/" + kernel_filename_;
     std::fstream FILE(kernel_filename_);
     kernel_elem_.clear();
     std::string line;
