@@ -17,6 +17,7 @@ Organization: CMU Sub-T Explorer Team
 #include <pcl/filters/voxel_grid.h>
 #include <velodyne_pointcloud/point_types.h>
 #include <velodyne_pointcloud/rawdata.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <unordered_set>
 #include <tf/transform_broadcaster.h>
 #include <vector>
@@ -103,6 +104,8 @@ private:
     float correlation_thred_;
     int col_filter_size_;
     int frame_filter_size_;
+    int cluster_fliter_size_;
+    float cluster_radius_;
     std::vector<std::vector<Point3D> > elem_matrix_;
     std::vector<Point3D> elem_score_;
     std::deque<std::vector<Point3D> > frame_elem_score_;
@@ -124,6 +127,7 @@ private:
     // Operation Functions
     void Initialization();
     void TopicHandle();
+    void ClusterFilter();
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
     void NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up);
