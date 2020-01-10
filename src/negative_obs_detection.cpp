@@ -45,7 +45,7 @@ NegObsDetect::NegObsDetect() {
         cluster_filter_size_ = 10;
     }
     if (!nh_.getParam("/neg_obs_detection/cluster_radius", cluster_radius_)) {
-        cluster_radius_ = 10;
+        cluster_radius_ = 2.0;
     }
     this->Initialization();
 }
@@ -80,7 +80,7 @@ void NegObsDetect::Loop() {
 void NegObsDetect::TopicHandle() {
 /* cloud type transpose and msg publish*/
     pcl::toROSMsg(*ground_cloud_, ground_ros_cloud_);
-    pcl::toROSMsg(*stair_center_cloud_, stair_center_ros_cloud_);
+    pcl::toROSMsg(*filtered_stair_cloud_, stair_center_ros_cloud_);
     // std::cout<<"Frame Id: "<<cloud_msg_->header.frame_id<<std::endl;
     ground_ros_cloud_.header = cloud_msg_->header;
     stair_center_ros_cloud_.header = cloud_msg_->header;
@@ -96,6 +96,8 @@ void NegObsDetect::Initialization() {
     laser_cloud_image_world_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
     ground_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
     stair_center_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    filtered_stair_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
+    kdtree_stair_cloud_ = pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr(new pcl::KdTreeFLANN<pcl::PointXYZI>());
     
     nanPoint_.x = std::numeric_limits<float>::quiet_NaN();
     nanPoint_.y = std::numeric_limits<float>::quiet_NaN();
@@ -300,30 +302,34 @@ void NegObsDetect::SimularityCalculation() {
             if (elem_score_[i].z > correlation_thred_) {
                 int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
                 temp_point = laser_cloud_image_->points[id_check];
-                this->RightRotatePointToWorld(temp_point);
-                stair_center_cloud_->push_back(temp_point);
+                if (!isnan(temp_point.x)) {
+                    this->RightRotatePointToWorld(temp_point);
+                    stair_center_cloud_->push_back(temp_point);
+                }
             }
         }
         std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
     }
+    filtered_stair_cloud_->clear();
+    if (stair_center_cloud_->points.size() > 2*cluster_filter_size_) {
+        this->ClusterFilter();
+    }
 }
 
-void NegObsDetect::ClusterFilter(PointCloudPtr raw_stair_center_cloud) {
+void NegObsDetect::ClusterFilter() {
     // Credit: Chao C,.
     std::vector<int> pointSearchInd;
     std::vector<float> pointSearchSqDis;
-    std::size_t cloudSize = raw_stair_center_cloud->points.size();
-    pcl::KdTreeFLANN<PointType>::Ptr kdtree_stair_cloud;
-    kdtree_stair_cloud->setInputCloud(raw_stair_center_cloud);
+    std::size_t cloudSize = stair_center_cloud_->points.size();
+    kdtree_stair_cloud_->setInputCloud(stair_center_cloud_);
     PointType thisPoint;
     for (std::size_t i=0; i<cloudSize; i++) {
-        thisPoint = raw_stair_center_cloud->points[i];
-        kdtree_stair_cloud->radiusSearch(thisPoint, cluster_radius_, pointSearchInd, pointSearchSqDis);
-        if (pointSearchInd.size() > cluster_fliter_size_) {
-            
+        thisPoint = stair_center_cloud_->points[i];
+        kdtree_stair_cloud_->radiusSearch(thisPoint, cluster_radius_, pointSearchInd, pointSearchSqDis);
+        if (pointSearchInd.size() > cluster_filter_size_) {
+            filtered_stair_cloud_->push_back(thisPoint);
         } 
     }
-
 }
 
 void NegObsDetect::GroundSegmentation() {

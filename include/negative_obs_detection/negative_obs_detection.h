@@ -104,7 +104,7 @@ private:
     float correlation_thred_;
     int col_filter_size_;
     int frame_filter_size_;
-    int cluster_fliter_size_;
+    int cluster_filter_size_;
     float cluster_radius_;
     std::vector<std::vector<Point3D> > elem_matrix_;
     std::vector<Point3D> elem_score_;
@@ -118,7 +118,9 @@ private:
     PointCloudPtr laser_cloud_image_;
     PointCloudPtr laser_cloud_image_world_;
     PointCloudPtr ground_cloud_;
+    PointCloudPtr filtered_stair_cloud_;
     PointCloudPtr stair_center_cloud_;
+    pcl::KdTreeFLANN<PointType>::Ptr kdtree_stair_cloud_;
     sensor_msgs::PointCloud2ConstPtr cloud_msg_;
     sensor_msgs::PointCloud2 ground_ros_cloud_;
     sensor_msgs::PointCloud2 cloud_image_ros_cloud_;
