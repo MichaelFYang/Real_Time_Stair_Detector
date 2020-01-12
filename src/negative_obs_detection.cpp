@@ -23,6 +23,12 @@ NegObsDetect::NegObsDetect() {
     if (!nh_.getParam("/neg_obs_detection/neg_obs_topic_pub", stair_topic_pub_)) {
         stair_topic_pub_ = "/neg_detect/stair_topic_pub";
     }
+    if (!nh_.getParam("/neg_obs_detection/is_stair_topic_pub", is_stair_topic_pub_)) {
+        stair_topic_pub_ = "/neg_detect/is_stair_topic_pub";
+    }
+    if (!nh_.getParam("/neg_obs_detection/stair_poses_topic_pub", stair_poses_topic_pub_)) {
+        stair_topic_pub_ = "/neg_detect/stair_poses_topic_pub";
+    }
     if (!nh_.getParam("/neg_obs_detection/kernel_server_topic",kernel_server_topic_)) {
         kernel_server_topic_ = "/neg_detect/kernel_serve_topic";
     }
@@ -55,6 +61,8 @@ void NegObsDetect::Loop() {
     ground_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(ground_topic_pub_,1);
     stair_center_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(stair_topic_pub_,1);
     cloud_image_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(cloud_image_topic_pub_,1);
+    is_stair_pub_ = nh_.advertise<std_msgs::Bool>(is_stair_topic_pub_,1);
+    stair_poses_pub_ = nh_.advertise<geometry_msgs::PoseArray>(stair_poses_topic_pub_,1);
     point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
     odom_sub_ = nh_.subscribe(odom_topic_sub_,1,&NegObsDetect::OdomHandler,this);
     kenerl_service_ = nh_.advertiseService(kernel_server_topic_,&NegObsDetect::KernelGeneration,this);
@@ -67,6 +75,7 @@ void NegObsDetect::Loop() {
         // std::cout<<"Debug Here: 1"<<std::endl;
         if (!laser_cloud_->empty()) {
         //process
+            is_stair_ = false;
             this->CloudImageProjection();
             this->GroundSegmentation();
             // std::cout<<"Debug Here: 3"<<std::endl;
@@ -82,10 +91,13 @@ void NegObsDetect::TopicHandle() {
     pcl::toROSMsg(*ground_cloud_, ground_ros_cloud_);
     pcl::toROSMsg(*filtered_stair_cloud_, stair_center_ros_cloud_);
     // std::cout<<"Frame Id: "<<cloud_msg_->header.frame_id<<std::endl;
+    std_msgs::Bool is_stair_ros;
+    is_stair_ros.data = is_stair_;
     ground_ros_cloud_.header = cloud_msg_->header;
     stair_center_ros_cloud_.header = cloud_msg_->header;
     ground_cloud_pub_.publish(ground_ros_cloud_);
     stair_center_pub_.publish(stair_center_ros_cloud_);
+    is_stair_pub_.publish(is_stair_ros);
 }
 
 void NegObsDetect::Initialization() {
@@ -112,7 +124,7 @@ void NegObsDetect::Initialization() {
     is_inited_ = false;
     frame_elem_score_.clear();
     std::cout<<"Initialize Successful"<<std::endl;
-
+    is_stair_ = false;
 }
 
 void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg) {
@@ -313,6 +325,7 @@ void NegObsDetect::SimularityCalculation() {
     filtered_stair_cloud_->clear();
     if (stair_center_cloud_->points.size() > 2*cluster_filter_size_) {
         this->ClusterFilter();
+        is_stair_ = true;
     }
 }
 

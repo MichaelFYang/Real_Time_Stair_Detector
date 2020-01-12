@@ -11,6 +11,8 @@ Organization: CMU Sub-T Explorer Team
 #include <nav_msgs/Odometry.h>
 #include <algorithm>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_msgs/Bool.h>
+#include <geometry_msgs/PoseArray.h>
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -91,11 +93,16 @@ private:
     ros::Publisher ground_cloud_pub_;
     ros::Publisher cloud_image_pub_;
     ros::Publisher stair_center_pub_;
+    ros::Publisher is_stair_pub_;
+    ros::Publisher stair_poses_pub_;
     ros::ServiceServer kenerl_service_;
     // params
-    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, stair_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_;
+    std::string laser_topic_sub_, odom_topic_sub_, ground_topic_pub_, 
+                stair_topic_pub_, cloud_image_topic_pub_, kernel_server_topic_, 
+                is_stair_topic_pub_, stair_poses_topic_pub_;
     std::string odom_frame_id_;
     std::vector<Point3D> kernel_elem_;
+    bool is_stair_;
     std::string kernel_filename_;
     bool is_kernel_, is_inited_;
     float slope_thresh_;
