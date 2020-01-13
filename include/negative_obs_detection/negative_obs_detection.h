@@ -10,9 +10,11 @@ Organization: CMU Sub-T Explorer Team
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <algorithm>
+#include <pcl/common/centroid.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/Bool.h>
 #include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Pose.h>
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -42,6 +44,7 @@ Organization: CMU Sub-T Explorer Team
 
 typedef pcl::PointXYZI PointType;
 typedef pcl::PointCloud<PointType>::Ptr PointCloudPtr;
+typedef pcl::CentroidPoint<PointType> CenterCloud;
 
 struct Point3D {
     float x;
@@ -49,6 +52,7 @@ struct Point3D {
     float z;
     Point3D() {}
     Point3D(float _x, float _y, float _z): x(_x), y(_y), z(_z) {}
+    Point3D(PointType &p): x(p.x), y(p.y), z(p.z) {}
     bool operator ==(const Point3D& pt) const
     {
         return x == pt.x && y == pt.y && z == pt.z;
@@ -112,11 +116,13 @@ private:
     int col_filter_size_;
     int frame_filter_size_;
     int cluster_filter_size_;
+    int kMeans_iters_;
     float cluster_radius_;
     std::vector<std::vector<Point3D> > elem_matrix_;
     std::vector<Point3D> elem_score_;
     std::deque<std::vector<Point3D> > frame_elem_score_;
     nav_msgs::Odometry odom_;
+    geometry_msgs::PoseArray stair_center_pose_array_;
     Point3D robot_pos_;
     PointType nanPoint_;
     // TF tree
@@ -140,6 +146,7 @@ private:
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
     void NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up);
+    void KMeansCluster(PointCloudPtr filtered_stair_cloud);
     void FilterColumn();
     void FilterFrames();
     void ReadKernelFile();
@@ -147,6 +154,7 @@ private:
     void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
+    void UpdateClusterCloud(PointType check_point, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2);
     void TransCloudFrame();
     void GroundSegmentation();
     void CloudImageProjection();

@@ -38,6 +38,9 @@ NegObsDetect::NegObsDetect() {
     if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
         slope_thresh_ = 50.0;
     }
+    if (!nh_.getParam("/neg_obs_detection/kMeans_iters", kMeans_iters_)) {
+        kMeans_iters_ = 200;
+    }
     if (!nh_.getParam("/neg_obs_detection/flat_thresh", flat_thresh_)) {
         flat_thresh_ = 10.0;
     }
@@ -190,6 +193,47 @@ void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
     pnt.x = pnt.y;
     pnt.y = pnt.z;
     pnt.z = tmp_x;
+}
+
+void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
+/* Generate Cluster Center -- Max cluster -> 3*/
+    stair_center_pose_array_.poses.clear();
+    PointType c0, c1, c2;
+    float d01,d02,d12;
+    std::size_t cloudSize = filtered_stair_cloud->points.size();
+    // initialize
+    c0 = filtered_stair_cloud->points[0];
+    c1 = filtered_stair_cloud->points[1];
+    c2 = filtered_stair_cloud->points[2];
+    int iter = 0;
+    while (iter < kMeans_iters_) {
+        CenterCloud pc0, pc1, pc2;
+        pc0.add(c0);
+        pc1.add(c1);
+        pc2.add(c2);
+        for (std::size_t i=0; i<cloudSize; i++) {
+            PointType check_point = filtered_stair_cloud->points[i];
+            this->UpdateClusterCloud(check_point,pc0,pc1,pc2); // add the check_point to the centercloud with min dist.
+        }
+        // update center
+        pc0.get(c0);
+        pc1.get(c1);
+        pc2.get(c2);
+    }
+    d01 = sqrt((c0.x - c1.x)*(c0.x - c1.x) + (c0.y - c1.y)*(c0.y - c1.y) + (c0.z - c1.z)*(c0.z - c1.z));
+    d02 = sqrt((c0.x - c2.x)*(c0.x - c2.x) + (c0.y - c2.y)*(c0.y - c2.y) + (c0.z - c2.z)*(c0.z - c2.z));
+    d12 = sqrt((c1.x - c2.x)*(c1.x - c2.x) + (c1.y - c2.y)*(c1.y - c2.y) + (c1.z - c2.z)*(c1.z - c2.z));
+    geometry_msgs::Pose tmp_pose;
+    if (d01 > 2*cluster_radius_ && d02 > 2*cluster_radius_) {
+        tmp_pose.position.x = c0.x;
+        tmp_pose.position.y = c0.y;
+        tmp_pose.position.z = c0.z;
+        stair_center_pose_array_.poses.push_back(tmp_pose);
+    } 
+}
+
+void NegObsDetect::UpdateClusterCloud(PointType check_point, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
+    //TODO!
 }
 
 void NegObsDetect::CloudImageProjection() {

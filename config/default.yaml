@@ -9,9 +9,10 @@ stair_poses_pub: /neg_detect/stair_poses_topic_pub
 kernel_server_topic: /neg_detect/kernel_serve_topic
 kernel_filename: stair_kernel.txt
 cluster_filter_size: 10
-cluster_radius: 2.0
+cluster_radius: 1.0
 slope_thresh: 50.0
 flat_thresh: 10.0
+kMeans_iters:  200
 col_filter_size: 25
-frame_filter_size: 30
+frame_filter_size: 20
 
