@@ -24,10 +24,10 @@ NegObsDetect::NegObsDetect() {
         stair_topic_pub_ = "/neg_detect/stair_topic_pub";
     }
     if (!nh_.getParam("/neg_obs_detection/is_stair_topic_pub", is_stair_topic_pub_)) {
-        stair_topic_pub_ = "/neg_detect/is_stair_topic_pub";
+        is_stair_topic_pub_ = "/neg_detect/is_stair_topic_pub";
     }
     if (!nh_.getParam("/neg_obs_detection/stair_poses_topic_pub", stair_poses_topic_pub_)) {
-        stair_topic_pub_ = "/neg_detect/stair_poses_topic_pub";
+        stair_poses_topic_pub_ = "/neg_detect/stair_poses_topic_pub";
     }
     if (!nh_.getParam("/neg_obs_detection/kernel_server_topic",kernel_server_topic_)) {
         kernel_server_topic_ = "/neg_detect/kernel_serve_topic";
@@ -97,10 +97,12 @@ void NegObsDetect::TopicHandle() {
     std_msgs::Bool is_stair_ros;
     is_stair_ros.data = is_stair_;
     ground_ros_cloud_.header = cloud_msg_->header;
+    stair_center_pose_array_.header = cloud_msg_->header;
     stair_center_ros_cloud_.header = cloud_msg_->header;
     ground_cloud_pub_.publish(ground_ros_cloud_);
     stair_center_pub_.publish(stair_center_ros_cloud_);
     is_stair_pub_.publish(is_stair_ros);
+    stair_poses_pub_.publish(stair_center_pose_array_);
 }
 
 void NegObsDetect::Initialization() {
@@ -198,8 +200,9 @@ void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
 void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
 /* Generate Cluster Center -- Max cluster -> 3*/
     stair_center_pose_array_.poses.clear();
-    PointType c0, c1, c2;
+    PointType c0, c1, c2, c_max;
     float d01,d02,d12;
+    geometry_msgs::Pose tmp_pose;
     std::size_t cloudSize = filtered_stair_cloud->points.size();
     // initialize
     c0 = filtered_stair_cloud->points[0];
@@ -219,21 +222,20 @@ void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
         pc0.get(c0);
         pc1.get(c1);
         pc2.get(c2);
+        c_max = this->UpdateCenterMax(pc0,pc1,pc2);
     }
-    d01 = sqrt((c0.x - c1.x)*(c0.x - c1.x) + (c0.y - c1.y)*(c0.y - c1.y) + (c0.z - c1.z)*(c0.z - c1.z));
-    d02 = sqrt((c0.x - c2.x)*(c0.x - c2.x) + (c0.y - c2.y)*(c0.y - c2.y) + (c0.z - c2.z)*(c0.z - c2.z));
-    d12 = sqrt((c1.x - c2.x)*(c1.x - c2.x) + (c1.y - c2.y)*(c1.y - c2.y) + (c1.z - c2.z)*(c1.z - c2.z));
-    geometry_msgs::Pose tmp_pose;
-    if (d01 > 2*cluster_radius_ && d02 > 2*cluster_radius_) {
-        tmp_pose.position.x = c0.x;
-        tmp_pose.position.y = c0.y;
-        tmp_pose.position.z = c0.z;
-        stair_center_pose_array_.poses.push_back(tmp_pose);
-    } 
+    tmp_pose.position.x = c_max.x;
+    tmp_pose.position.y = c_max.y;
+    tmp_pose.position.z = c_max.z;
+    stair_center_pose_array_.poses.push_back(tmp_pose);
 }
 
 void NegObsDetect::UpdateClusterCloud(PointType check_point, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
-    //TODO!
+    /* TODO! */
+}
+
+PointType NegObsDetect::UpdateCenterMax(const CenterCloud &pc0, const CenterCloud &pc1, const CenterCloud &pc2) {
+    /* TODO! */
 }
 
 void NegObsDetect::CloudImageProjection() {

@@ -150,6 +150,7 @@ private:
     void FilterColumn();
     void FilterFrames();
     void ReadKernelFile();
+    PointType UpdateCenterMax(const CenterCloud &pc0, const CenterCloud &pc1, const CenterCloud &pc2);
     std::vector<Point3D> NormColElem(const std::vector<Point3D> &elem_col, bool is_process);
     void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
