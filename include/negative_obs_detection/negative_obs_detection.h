@@ -155,7 +155,7 @@ private:
     void TransToWorld(pcl::PointXYZI &pnt);
     void CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg);
     void OdomHandler(const nav_msgs::Odometry odom_msg);
-    void UpdateClusterCloud(PointType check_point, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2);
+    void UpdateClusterCloud(const PointType &check_point, const PointType &c0, const PointType &c1, const PointType &c2, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2);
     void TransCloudFrame();
     void GroundSegmentation();
     void CloudImageProjection();

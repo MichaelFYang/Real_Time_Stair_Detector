@@ -39,7 +39,7 @@ NegObsDetect::NegObsDetect() {
         slope_thresh_ = 50.0;
     }
     if (!nh_.getParam("/neg_obs_detection/kMeans_iters", kMeans_iters_)) {
-        kMeans_iters_ = 200;
+        kMeans_iters_ = 10;
     }
     if (!nh_.getParam("/neg_obs_detection/flat_thresh", flat_thresh_)) {
         flat_thresh_ = 10.0;
@@ -199,9 +199,7 @@ void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
 
 void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
 /* Generate Cluster Center -- Max cluster -> 3*/
-    stair_center_pose_array_.poses.clear();
     PointType c0, c1, c2, c_max;
-    float d01,d02,d12;
     geometry_msgs::Pose tmp_pose;
     std::size_t cloudSize = filtered_stair_cloud->points.size();
     // initialize
@@ -216,13 +214,14 @@ void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
         pc2.add(c2);
         for (std::size_t i=0; i<cloudSize; i++) {
             PointType check_point = filtered_stair_cloud->points[i];
-            this->UpdateClusterCloud(check_point,pc0,pc1,pc2); // add the check_point to the centercloud with min dist.
+            this->UpdateClusterCloud(check_point,c0,c1,c2,pc0,pc1,pc2); // add the check_point to the centercloud with min dist.
         }
         // update center
         pc0.get(c0);
         pc1.get(c1);
         pc2.get(c2);
         c_max = this->UpdateCenterMax(pc0,pc1,pc2);
+        iter ++;
     }
     tmp_pose.position.x = c_max.x;
     tmp_pose.position.y = c_max.y;
@@ -230,12 +229,35 @@ void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
     stair_center_pose_array_.poses.push_back(tmp_pose);
 }
 
-void NegObsDetect::UpdateClusterCloud(PointType check_point, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
-    /* TODO! */
+void NegObsDetect::UpdateClusterCloud(const PointType &check_point, const PointType &c0, const PointType &c1, const PointType &c2, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
+    /* TODO! Add the checkpoint to the nearest centeriod point cloud */
+    float d0,d1,d2;
+    float min_dist = 0;
+    d0 = (check_point.x - c0.x) * (check_point.x - c0.x) + (check_point.y - c0.y) * (check_point.y - c0.y) + (check_point.z - c0.z) * (check_point.z - c0.z);
+    d1 = (check_point.x - c1.x) * (check_point.x - c1.x) + (check_point.y - c1.y) * (check_point.y - c1.y) + (check_point.z - c1.z) * (check_point.z - c1.z);
+    d2 = (check_point.x - c2.x) * (check_point.x - c2.x) + (check_point.y - c2.y) * (check_point.y - c2.y) + (check_point.z - c2.z) * (check_point.z - c2.z);
+    min_dist = d0;
+    if (min_dist > d1) min_dist = d1;
+    if (min_dist > d2) min_dist = d2;
+    if (min_dist == d0) pc0.add(check_point);
+    if (min_dist == d1) pc1.add(check_point);
+    if (min_dist == d2) pc2.add(check_point);
 }
 
 PointType NegObsDetect::UpdateCenterMax(const CenterCloud &pc0, const CenterCloud &pc1, const CenterCloud &pc2) {
     /* TODO! */
+    float n0,n1,n2;
+    PointType c_max;
+    n0 = pc0.getSize();
+    n1 = pc1.getSize();
+    n2 = pc2.getSize();
+    float max_num = n0;
+    if (n1 > max_num) max_num = n1;
+    if (n2 > max_num) max_num = n2;
+    if (max_num == n0) pc0.get(c_max);
+    if (max_num == n1) pc1.get(c_max);
+    if (max_num == n2) pc2.get(c_max);
+    return c_max; 
 }
 
 void NegObsDetect::CloudImageProjection() {
@@ -329,6 +351,7 @@ std::vector<Point3D> NegObsDetect::NormColElem(const std::vector<Point3D> &elem_
 
 void NegObsDetect::SimularityCalculation() {
     stair_center_cloud_->clear();
+    stair_center_pose_array_.poses.clear();
     PointType temp_point;
     int num_windows = int(N_SCAN/2) - KERNEL_SIZE + 1;
     for (std::size_t i=0; i<HORIZON_SCAN; i++) {
@@ -371,6 +394,7 @@ void NegObsDetect::SimularityCalculation() {
     filtered_stair_cloud_->clear();
     if (stair_center_cloud_->points.size() > 2*cluster_filter_size_) {
         this->ClusterFilter();
+        this->KMeansCluster(filtered_stair_cloud_);
         is_stair_ = true;
     }
 }

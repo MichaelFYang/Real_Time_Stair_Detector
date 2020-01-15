@@ -12,7 +12,7 @@ cluster_filter_size: 10
 cluster_radius: 1.0
 slope_thresh: 50.0
 flat_thresh: 10.0
-kMeans_iters:  200
+kMeans_iters:  50
 col_filter_size: 25
 frame_filter_size: 20
 
