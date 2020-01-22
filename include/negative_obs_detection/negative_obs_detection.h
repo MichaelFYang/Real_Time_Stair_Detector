@@ -19,8 +19,7 @@ Organization: CMU Sub-T Explorer Team
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
-#include <velodyne_pointcloud/point_types.h>
-#include <velodyne_pointcloud/rawdata.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <unordered_set>
 #include <tf/transform_broadcaster.h>
