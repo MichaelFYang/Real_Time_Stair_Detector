@@ -145,6 +145,7 @@ private:
     bool KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res);
     void NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up);
+    void FindMaxScore(float& score_x, float& score_y, float& score_z);
     void KMeansCluster(PointCloudPtr filtered_stair_cloud);
     void FilterColumn();
     void FilterFrames();

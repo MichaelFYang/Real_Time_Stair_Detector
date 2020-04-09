@@ -379,6 +379,7 @@ void NegObsDetect::SimularityCalculation() {
     this->FilterColumn();
     this->FilterFrames();
     if (is_inited_) {
+        float max_score_x, max_score_y, max_score_z;
         for (std::size_t i=0; i<HORIZON_SCAN; i++) {
             if (elem_score_[i].z > correlation_thred_) {
                 int id_check = i + int(N_SCAN/4)*HORIZON_SCAN;
@@ -389,13 +390,33 @@ void NegObsDetect::SimularityCalculation() {
                 }
             }
         }
-        std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
+        this->FindMaxScore(max_score_x, max_score_y, max_score_z);
+        // std::cout<<"Center Simularity Score X: "<<elem_score_[int(HORIZON_SCAN/2)].x <<" -- Center Simularity Score Z: "<<elem_score_[int(HORIZON_SCAN/2)].z<<std::endl;
+        std::cout<<"Max Simularity Score: "<<max_score_z <<" -- Threshold: "<<correlation_thred_<<std::endl;
     }
     filtered_stair_cloud_->clear();
     if (stair_center_cloud_->points.size() > 2*cluster_filter_size_) {
         this->ClusterFilter();
         this->KMeansCluster(filtered_stair_cloud_);
         is_stair_ = true;
+    }
+}
+
+void NegObsDetect::FindMaxScore(float& score_x, float& score_y, float& score_z) {
+    score_x = elem_score_[0].x;
+    score_x = elem_score_[0].y;
+    score_z = elem_score_[0].z;
+    for (auto it=elem_score_.begin()+1; it!=elem_score_.end();it++) {
+        Point3D score_elem = *it;
+        if (score_elem.x > score_x) {
+            score_x = score_elem.x;
+        }
+        if (score_elem.y > score_y) {
+            score_y = score_elem.y;
+        }
+        if (score_elem.z > score_z) {
+            score_z = score_elem.z;
+        }
     }
 }
 
