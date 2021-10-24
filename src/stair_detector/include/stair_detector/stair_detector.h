@@ -1,7 +1,7 @@
 /*
-Negtive Obstable Detection
-Author: Fan Yang (fanyang2@cs.cmu.edu)
-Organization: CMU Sub-T Explorer Team
+* Real-Time Stair Detector
+* Author: Fan Yang (fanyang2@cs.cmu.edu)
+* Carnegie Mellon Univeristy - Robotics Institute
 */
 
 #include <ros/ros.h>
@@ -18,7 +18,6 @@ Organization: CMU Sub-T Explorer Team
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <unordered_set>
@@ -83,10 +82,10 @@ struct Point3D {
 };
 
 
-class NegObsDetect
+class STDetector
 {
 public:
-    NegObsDetect();
+    STDetector();
     void Loop();
 private:
     // ROS Valuables

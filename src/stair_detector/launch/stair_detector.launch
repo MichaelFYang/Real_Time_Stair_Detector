@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="stair_detector" type="stair_detector" name="stair_detector" output="screen">
+        <rosparam command="load" file="$(find stair_detector)/config/default.yaml" />
+    </node>
+    <node type="rviz" name="st_detect_rviz" pkg="rviz" args="-d $(find stair_detector)/rviz/default.rviz" respawn="true"/>
+</launch>
