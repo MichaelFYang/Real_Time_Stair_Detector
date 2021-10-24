@@ -271,7 +271,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.5
       Style: Flat Squares
-      Topic: /neg_detect/ground_cloud
+      Topic: /ground_cloud
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -301,7 +301,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.5
       Style: Flat Squares
-      Topic: /neg_detect/stair_topic_pub
+      Topic: /stair_topic_pub
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true

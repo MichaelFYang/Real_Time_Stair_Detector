@@ -1,87 +1,84 @@
-#include "negative_obs_detection/negative_obs_detection.h"
+#include "stair_detector/stair_detector.h"
 
 /* --------------------------------------------------------------- */
 
-NegObsDetect::NegObsDetect() {
-/* TODO! */
+STDetector::STDetector() {
      // Initai ROS params
-    if (!nh_.getParam("/neg_obs_detection/correlation_thred",correlation_thred_)) {
+    if (!nh_.getParam("/stair_detector/correlation_thred",correlation_thred_)) {
         correlation_thred_ = 0.85;
     }
-    if (!nh_.getParam("/neg_obs_detection/laser_topic_sub",laser_topic_sub_)) {
+    if (!nh_.getParam("/stair_detector/laser_topic_sub",laser_topic_sub_)) {
         laser_topic_sub_ = "/velodyne_cloud_registered";
     }
-    if (!nh_.getParam("/neg_obs_detection/odom_topic_sub",odom_topic_sub_)) {
+    if (!nh_.getParam("/stair_detector/odom_topic_sub",odom_topic_sub_)) {
         odom_topic_sub_ = "/integrated_to_map";
     }
-    if (!nh_.getParam("/neg_obs_detection/cloud_image_topic_pub",cloud_image_topic_pub_)) {
-       cloud_image_topic_pub_ = "/neg_detect/cloud_image";
+    if (!nh_.getParam("/stair_detector/cloud_image_topic_pub",cloud_image_topic_pub_)) {
+       cloud_image_topic_pub_ = "/cloud_image";
     }
-    if (!nh_.getParam("/neg_obs_detection/ground_topic_pub",ground_topic_pub_)) {
-        ground_topic_pub_ = "/neg_detect/ground_cloud";
+    if (!nh_.getParam("/stair_detector/ground_topic_pub",ground_topic_pub_)) {
+        ground_topic_pub_ = "/ground_cloud";
     } 
-    if (!nh_.getParam("/neg_obs_detection/neg_obs_topic_pub", stair_topic_pub_)) {
-        stair_topic_pub_ = "/neg_detect/stair_topic_pub";
+    if (!nh_.getParam("/stair_detector/stair_topic_pub", stair_topic_pub_)) {
+        stair_topic_pub_ = "/stair_topic_pub";
     }
-    if (!nh_.getParam("/neg_obs_detection/is_stair_topic_pub", is_stair_topic_pub_)) {
-        is_stair_topic_pub_ = "/neg_detect/is_stair_topic_pub";
+    if (!nh_.getParam("/stair_detector/is_stair_topic_pub", is_stair_topic_pub_)) {
+        is_stair_topic_pub_ = "/is_stair_topic_pub";
     }
-    if (!nh_.getParam("/neg_obs_detection/stair_poses_topic_pub", stair_poses_topic_pub_)) {
-        stair_poses_topic_pub_ = "/neg_detect/stair_poses_topic_pub";
+    if (!nh_.getParam("/stair_detector/stair_poses_topic_pub", stair_poses_topic_pub_)) {
+        stair_poses_topic_pub_ = "/stair_poses_topic_pub";
     }
-    if (!nh_.getParam("/neg_obs_detection/kernel_server_topic",kernel_server_topic_)) {
-        kernel_server_topic_ = "/neg_detect/kernel_serve_topic";
+    if (!nh_.getParam("/stair_detector/kernel_server_topic",kernel_server_topic_)) {
+        kernel_server_topic_ = "/kernel_server_topic";
     }
-    if (!nh_.getParam("/neg_obs_detection/kernel_filename",kernel_filename_)) {
+    if (!nh_.getParam("/stair_detector/kernel_filename",kernel_filename_)) {
         kernel_filename_ = "/stair_kernel.txt";
     }
-    if (!nh_.getParam("/neg_obs_detection/slope_thresh", slope_thresh_)) {
+    if (!nh_.getParam("/stair_detector/slope_thresh", slope_thresh_)) {
         slope_thresh_ = 50.0;
     }
-    if (!nh_.getParam("/neg_obs_detection/kMeans_iters", kMeans_iters_)) {
+    if (!nh_.getParam("/stair_detector/kMeans_iters", kMeans_iters_)) {
         kMeans_iters_ = 10;
     }
-    if (!nh_.getParam("/neg_obs_detection/flat_thresh", flat_thresh_)) {
+    if (!nh_.getParam("/stair_detector/flat_thresh", flat_thresh_)) {
         flat_thresh_ = 10.0;
     }
-    if (!nh_.getParam("/neg_obs_detection/col_filter_size", col_filter_size_)) {
+    if (!nh_.getParam("/stair_detector/col_filter_size", col_filter_size_)) {
         col_filter_size_ = 25;
     }
-    if (!nh_.getParam("/neg_obs_detection/frame_filter_size", frame_filter_size_)) {
+    if (!nh_.getParam("/stair_detector/frame_filter_size", frame_filter_size_)) {
         frame_filter_size_ = 20;
     }
-    if (!nh_.getParam("/neg_obs_detection/cluster_filter_size", cluster_filter_size_)) {
+    if (!nh_.getParam("/stair_detector/cluster_filter_size", cluster_filter_size_)) {
         cluster_filter_size_ = 10;
     }
-    if (!nh_.getParam("/neg_obs_detection/cluster_radius", cluster_radius_)) {
+    if (!nh_.getParam("/stair_detector/cluster_radius", cluster_radius_)) {
         cluster_radius_ = 2.0;
     }
     this->Initialization();
 }
 
-void NegObsDetect::Loop() {
-/* TODO! */
+void STDetector::Loop() {
     ground_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(ground_topic_pub_,1);
     stair_center_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(stair_topic_pub_,1);
-    cloud_image_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(cloud_image_topic_pub_,1);
-    is_stair_pub_ = nh_.advertise<std_msgs::Bool>(is_stair_topic_pub_,1);
-    stair_poses_pub_ = nh_.advertise<geometry_msgs::PoseArray>(stair_poses_topic_pub_,1);
-    point_cloud_sub_ = nh_.subscribe(laser_topic_sub_,1,&NegObsDetect::CloudHandler,this);
-    odom_sub_ = nh_.subscribe(odom_topic_sub_,1,&NegObsDetect::OdomHandler,this);
-    kenerl_service_ = nh_.advertiseService(kernel_server_topic_,&NegObsDetect::KernelGeneration,this);
+    cloud_image_pub_  = nh_.advertise<sensor_msgs::PointCloud2>(cloud_image_topic_pub_,1);
+    is_stair_pub_     = nh_.advertise<std_msgs::Bool>(is_stair_topic_pub_,1);
+    stair_poses_pub_  = nh_.advertise<geometry_msgs::PoseArray>(stair_poses_topic_pub_,1);
+    point_cloud_sub_  = nh_.subscribe(laser_topic_sub_,1,&STDetector::CloudHandler,this);
+    odom_sub_         = nh_.subscribe(odom_topic_sub_,1,&STDetector::OdomHandler,this);
+    kenerl_service_   = nh_.advertiseService(kernel_server_topic_,&STDetector::KernelGeneration,this);
+    
     ros::Rate rate(5);
+    
     this->ReadKernelFile();
     if (!is_kernel_) return;
     while(ros::ok())
     {
         ros::spinOnce(); // process all callback function
-        // std::cout<<"Debug Here: 1"<<std::endl;
         if (!laser_cloud_->empty()) {
-        //process
             is_stair_ = false;
             this->CloudImageProjection();
             this->GroundSegmentation();
-            // std::cout<<"Debug Here: 3"<<std::endl;
             this->SimularityCalculation();
             if(is_inited_) this->TopicHandle();
         }else std::cout<<"The Point Cloud is Empty now!"<<std::endl;
@@ -89,7 +86,7 @@ void NegObsDetect::Loop() {
     }
 }
 
-void NegObsDetect::TopicHandle() {
+void STDetector::TopicHandle() {
 /* cloud type transpose and msg publish*/
     pcl::toROSMsg(*ground_cloud_, ground_ros_cloud_);
     pcl::toROSMsg(*filtered_stair_cloud_, stair_center_ros_cloud_);
@@ -105,8 +102,7 @@ void NegObsDetect::TopicHandle() {
     stair_poses_pub_.publish(stair_center_pose_array_);
 }
 
-void NegObsDetect::Initialization() {
-/* TODO!*/ 
+void STDetector::Initialization() {
     // Allocate Memory for PointClouds
     laser_cloud_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
     laser_cloud_image_ = PointCloudPtr(new pcl::PointCloud<pcl::PointXYZI>());
@@ -132,12 +128,11 @@ void NegObsDetect::Initialization() {
     is_stair_ = false;
 }
 
-void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg) {
+void STDetector::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg) {
 /* Callback function of raw point cloud */
     laser_cloud_->clear();
     laser_cloud_image_->clear();
     laser_cloud_image_world_->clear();
-    // std::cout<<"Debug Here: 2"<<std::endl;
     cloud_msg_ = cloud_msg;
     pcl::fromROSMsg(*cloud_msg, *laser_cloud_);
     this->TransCloudFrame();
@@ -145,7 +140,7 @@ void NegObsDetect::CloudHandler(const sensor_msgs::PointCloud2ConstPtr cloud_msg
     laser_cloud_image_world_->points.resize(N_SCAN*HORIZON_SCAN);
 }
 
-void NegObsDetect::OdomHandler(const nav_msgs::Odometry odom_msg) {
+void STDetector::OdomHandler(const nav_msgs::Odometry odom_msg) {
 /* Odom Callback function */
     odom_ = odom_msg;
     odom_frame_id_ = odom_msg.header.frame_id;
@@ -160,7 +155,7 @@ void NegObsDetect::OdomHandler(const nav_msgs::Odometry odom_msg) {
 
 }
 
-void NegObsDetect::TransCloudFrame() {
+void STDetector::TransCloudFrame() {
 /* Source credit: http://pointclouds.org/documentation/tutorials/passthrough.php */
     pcl::PointCloud<pcl::PointXYZI>::Ptr laser_cloud_temp(new pcl::PointCloud<pcl::PointXYZI>());
     laser_cloud_temp->clear();
@@ -175,7 +170,7 @@ void NegObsDetect::TransCloudFrame() {
     laser_cloud_ = laser_cloud_temp;
 }
 
-void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
+void STDetector::LeftRotatePoint(pcl::PointXYZI &pnt) {
 /* Credit:https://bitbucket.org/cmusubt/misc_utils/src/master/src/misc_utils.cpp */
     float tmp_z = pnt.z;
     pnt.z = pnt.y;
@@ -183,13 +178,13 @@ void NegObsDetect::LeftRotatePoint(pcl::PointXYZI &pnt) {
     pnt.x = tmp_z;
 }
 
-void NegObsDetect::TransToWorld(pcl::PointXYZI &pnt) {
+void STDetector::TransToWorld(pcl::PointXYZI &pnt) {
     pnt.x += robot_pos_.x;
     pnt.y += robot_pos_.y;
     pnt.z += robot_pos_.z;
 }
 
-void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
+void STDetector::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
 /* Credit:https://bitbucket.org/cmusubt/misc_utils/src/master/src/misc_utils.cpp */
     float tmp_x = pnt.x;
     pnt.x = pnt.y;
@@ -197,7 +192,7 @@ void NegObsDetect::RightRotatePointToWorld(pcl::PointXYZI &pnt) {
     pnt.z = tmp_x;
 }
 
-void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
+void STDetector::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
 /* Generate Cluster Center -- Max cluster -> 3*/
     PointType c0, c1, c2, c_max;
     geometry_msgs::Pose tmp_pose;
@@ -229,8 +224,8 @@ void NegObsDetect::KMeansCluster(PointCloudPtr filtered_stair_cloud) {
     stair_center_pose_array_.poses.push_back(tmp_pose);
 }
 
-void NegObsDetect::UpdateClusterCloud(const PointType &check_point, const PointType &c0, const PointType &c1, const PointType &c2, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
-    /* TODO! Add the checkpoint to the nearest centeriod point cloud */
+void STDetector::UpdateClusterCloud(const PointType &check_point, const PointType &c0, const PointType &c1, const PointType &c2, CenterCloud &pc0, CenterCloud &pc1, CenterCloud &pc2) {
+    /* Add the checkpoint to the nearest centeriod point cloud */
     float d0,d1,d2;
     float min_dist = 0;
     d0 = (check_point.x - c0.x) * (check_point.x - c0.x) + (check_point.y - c0.y) * (check_point.y - c0.y) + (check_point.z - c0.z) * (check_point.z - c0.z);
@@ -244,8 +239,7 @@ void NegObsDetect::UpdateClusterCloud(const PointType &check_point, const PointT
     if (min_dist == d2) pc2.add(check_point);
 }
 
-PointType NegObsDetect::UpdateCenterMax(const CenterCloud &pc0, const CenterCloud &pc1, const CenterCloud &pc2) {
-    /* TODO! */
+PointType STDetector::UpdateCenterMax(const CenterCloud &pc0, const CenterCloud &pc1, const CenterCloud &pc2) {
     float n0,n1,n2;
     PointType c_max;
     n0 = pc0.getSize();
@@ -260,8 +254,8 @@ PointType NegObsDetect::UpdateCenterMax(const CenterCloud &pc0, const CenterClou
     return c_max; 
 }
 
-void NegObsDetect::CloudImageProjection() {
-/* TODO -> Make a Project PointCloud into a image [row, col] for BSF search*/
+void STDetector::CloudImageProjection() {
+/* Make a Project PointCloud into a image [row, col] for BSF search*/
     std::fill(laser_cloud_image_->points.begin(), laser_cloud_image_->points.end(), nanPoint_);
     std::fill(laser_cloud_image_world_->points.begin(), laser_cloud_image_world_->points.end(), nanPoint_);
     float verticalAngle, horizonAngle, range;
@@ -307,7 +301,7 @@ void NegObsDetect::CloudImageProjection() {
     cloud_image_pub_.publish(cloud_image_ros_cloud_);
 }
 
-std::vector<Point3D> NegObsDetect::NormColElem(const std::vector<Point3D> &elem_col, bool is_process) {
+std::vector<Point3D> STDetector::NormColElem(const std::vector<Point3D> &elem_col, bool is_process) {
     std::vector<Point3D> new_elem_col;
     float sum_x = 0;
     float sum_z = 0;
@@ -349,7 +343,7 @@ std::vector<Point3D> NegObsDetect::NormColElem(const std::vector<Point3D> &elem_
     return new_elem_col;
 }
 
-void NegObsDetect::SimularityCalculation() {
+void STDetector::SimularityCalculation() {
     stair_center_cloud_->clear();
     stair_center_pose_array_.poses.clear();
     PointType temp_point;
@@ -402,7 +396,7 @@ void NegObsDetect::SimularityCalculation() {
     }
 }
 
-void NegObsDetect::FindMaxScore(float& score_x, float& score_y, float& score_z) {
+void STDetector::FindMaxScore(float& score_x, float& score_y, float& score_z) {
     score_x = elem_score_[0].x;
     score_x = elem_score_[0].y;
     score_z = elem_score_[0].z;
@@ -420,7 +414,7 @@ void NegObsDetect::FindMaxScore(float& score_x, float& score_y, float& score_z) 
     }
 }
 
-void NegObsDetect::ClusterFilter() {
+void STDetector::ClusterFilter() {
     // Credit: Chao C,.
     std::vector<int> pointSearchInd;
     std::vector<float> pointSearchSqDis;
@@ -436,7 +430,7 @@ void NegObsDetect::ClusterFilter() {
     }
 }
 
-void NegObsDetect::GroundSegmentation() {
+void STDetector::GroundSegmentation() {
 /* Segment Ground PointCloud -> Operation on laser_cloud_image */
     ground_cloud_->clear();
     PointType temp_point;
@@ -467,7 +461,7 @@ void NegObsDetect::GroundSegmentation() {
     }
 }
 
-void NegObsDetect::FilterColumn() {
+void STDetector::FilterColumn() {
     for (int i=0; i<HORIZON_SCAN; i++) {
         int begin_id = std::max(0,i-col_filter_size_);
         float sum_x = 0;
@@ -484,7 +478,7 @@ void NegObsDetect::FilterColumn() {
     }
 }
 
-void NegObsDetect::FilterFrames() {
+void STDetector::FilterFrames() {
     if (frame_elem_score_.size() >= frame_filter_size_) {
         frame_elem_score_.pop_front();
         is_inited_ = true;
@@ -517,7 +511,7 @@ void NegObsDetect::FilterFrames() {
     }
 }
 
-void NegObsDetect::NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up) {
+void STDetector::NeighberAngleUpdate(std::size_t col, std::size_t row, float& angle_down, float& angle_up) {
     PointType check_point, down_point, up_point;
     int id_check = col + row*HORIZON_SCAN;
     int id_down, id_up;
@@ -543,7 +537,7 @@ void NegObsDetect::NeighberAngleUpdate(std::size_t col, std::size_t row, float& 
     angle_up = fabs(atan2(diff_z_up, sqrt(diff_x_up*diff_x_up + diff_y_up*diff_y_up))*180/M_PI); 
 }
 
-bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,
+bool STDetector::KernelGeneration(std_srvs::Empty::Request &req,
                                     std_srvs::Empty::Response &res) {
     int center_col = int(HORIZON_SCAN/2);
     std::ofstream FILE(kernel_filename_);
@@ -556,9 +550,9 @@ bool NegObsDetect::KernelGeneration(std_srvs::Empty::Request &req,
     return true;
 }
 
-void NegObsDetect::ReadKernelFile() {
+void STDetector::ReadKernelFile() {
     // file the kernel from kernel file
-    kernel_filename_ = ros::package::getPath("neg_obs_detection") + "/data/" + kernel_filename_;
+    kernel_filename_ = ros::package::getPath("stair_detector") + "/data/" + kernel_filename_;
     std::fstream FILE(kernel_filename_);
     kernel_elem_.clear();
     std::string line;
@@ -577,12 +571,12 @@ void NegObsDetect::ReadKernelFile() {
     FILE.close();
 }
 
-float NegObsDetect::ReLu(float x) {
+float STDetector::ReLu(float x) {
     if (x>0) return x;
     else return 0;
 }
 
-float NegObsDetect::Sigmoid(float x)
+float STDetector::Sigmoid(float x)
 //Credit Kiyoshi Kawaguchi 2000-06-17; http://www.ece.utep.edu/research/webfuzzy/docs/kk-thesis/kk-thesis-html/node72.html
 {
     float exp_value;
@@ -595,6 +589,14 @@ float NegObsDetect::Sigmoid(float x)
     return_value = 1 / (1 + exp_value);
 
     return return_value;
+}
+
+/* Main Function */
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "stair_detector");
+    STDetector stair_detector;
+    stair_detector.Loop();
+    return 0;
 }
 
 
