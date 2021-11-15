@@ -4,7 +4,7 @@
 
 A light-weighted stair detection algorithm using 2D correlation analysis on real-time LiDAR scans that searches for a similar pattern of a manually generated kernel. 
 
-[A video showing a result of the stair detector here.](https://youtu.be/617FaTN6klg)
+[A video shows a result of this stair detector here.](https://youtu.be/617FaTN6klg)
 
 ## How to get the graph decoeder running on your workspace 
 
@@ -33,6 +33,12 @@ python <<YOUR WORKSPACE>>/src/stair_detector/src/kernal_generation.py
 ```
 The python script "kernel_generation.py" generates a normalized 2D kernel that used to find stairs. 
 You can modify the kernel and use it to seach for the pattern you want from the real-time LiDAR scans.
+
+## Reminder
+
+This is a research project that strongly depends on and ties to the certain platforms and frameworks used by CMU-OSU team for DARPA SubT Challenge. It is not well generalized for integration into other platforms. Intentions of using this code for you own researches may require works of code modifications.
+
+Questions asked in "Issues" for integrations will be answered with best availabilities. 
 
 
 ## Who could I talk to? 
