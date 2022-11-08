@@ -6,7 +6,7 @@ A light-weighted stair detection algorithm using 2D correlation analysis on real
 
 [A video shows a result of this stair detector here.](https://youtu.be/617FaTN6klg)
 
-## How to get the graph decoeder running on your workspace 
+## How to get the stair detector running on your workspace 
 
 #### Copy this planner workspace
 ```bash
@@ -16,7 +16,7 @@ catkin build
 source devel/setup.bash
 ```
 
-#### Before launch the decoder, make sure you have the correct topics of odom and registered poincloud in the config file
+#### Before launch the stair detector, make sure you have the correct topics of odom and registered poincloud in the config file
 Open the config file as the way you like
 ``` bash
 gedit <<YOUR WORKSPACE>>/src/stair_detector/config/default.yaml 
@@ -44,4 +44,4 @@ Questions asked in "Issues" for integrations will be answered with best availabi
 ## Who could I talk to? 
 
 Fan Yang
-(fanyang2@alumni.cmu.edu)
+(michael.yfan24@gmail.com, fanyang1@ethz.ch, fanyang2@alumni.cmu.edu)
